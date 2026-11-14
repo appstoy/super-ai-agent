@@ -41,9 +41,27 @@ class ToolCall:
 
 @dataclass(frozen=True, slots=True)
 class ModelUsage:
+    """Token accounting for one model call, including prompt-cache hits.
+
+    Providers that support prompt caching report how many input tokens were
+    served from cache. Surfacing it lets a user see why a follow-up turn on the
+    same thread is cheaper and faster than the first one - which is exactly the
+    value of continuing a conversation instead of starting a new task.
+    """
+
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    cached_tokens: int = 0
+    cache_write_tokens: int = 0
+
+    @property
+    def cache_hit_rate(self) -> float:
+        """Share of prompt tokens served from cache, 0.0-1.0."""
+
+        if self.prompt_tokens <= 0:
+            return 0.0
+        return min(1.0, self.cached_tokens / self.prompt_tokens)
 
 
 @dataclass(frozen=True, slots=True)

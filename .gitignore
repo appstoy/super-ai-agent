@@ -21,3 +21,8 @@ build/
 # Each task writes into its own subfolder here, so this grows with use
 # and must never be committed.
 项目缓存文件/
+
+# Full text of a third-party article (DeepSeek 产品部, 2026-10-31), kept locally
+# for reference only. It is not ours to republish; docs/article-analysis.md is
+# our own summary and stays tracked.
+super-agent-article-fulltext.md

@@ -32,8 +32,22 @@ user has:
 
 - did it work (`做好了` / `没做成` / `已取消`, plus a duration),
 - what came out (the model's leading sentence, not its whole report),
-- where you can see it (the files the task wrote, clickable, with HTML rendered
-  inline in a preview panel).
+- how it was done (a two-layer step trace: high-level summary for normal users,
+  plus expandable real evidence like input parameters, tool outputs, and filter
+  decisions for technical auditing),
+- where you can see it (files attached to cards, plus a dedicated **产出文件**
+  shelf at the bottom with real-time search, file deletion, and 1-click preview),
+- user-owned card actions (hover `⋯` on any card or file to pin, archive, pick
+  an accent colour, or delete; pinned items float to the top; long lists fold
+  older items into a single expandable button),
+- full native Markdown rendering (fenced code, tables, headings, blockquotes,
+  lists, without external CDN dependencies),
+- context continuation (click `💬 基于此任务继续` on any card to continue the
+  dialogue within the same persistent thread and Worker memory),
+- what it cost (`🔄 1 轮 · ↑ 1,159 入 · ↓ 51 出 · ⚡ 88% 缓存命中`): model
+  rounds, prompt/completion tokens, and prompt-cache reuse. The cache rate is
+  the concrete reason a continued thread is cheaper than a fresh task — measured
+  on a real two-turn thread, the cold turn hit 0% and the continuation 88%.
 
 A task can run for minutes, so the page also raises a **browser notification**
 when it finishes. Two rules keep it from being noise: permission is requested on
@@ -175,6 +189,32 @@ boundaries and the `GET /api/tools` load report.
 Runnable acceptance evidence (21 checks, no credentials required):
 
     python tools/verification/verify_tool_compat.py
+
+## 技能 / Skills
+
+工具是"能做什么"，技能是"知道怎么做"。技能是一个带 `SKILL.md` 的文件夹，
+里面写清某类任务的做事方法；它的正文只在你选中时才进入提示词，所以装三十个
+技能也不会占用日常上下文。
+
+    skills/release-notes/SKILL.md     # 项目自带示例
+    skills/html-page/SKILL.md
+
+用法三选一：
+
+    # 网页：输入框里打 / 选技能（↑↓ 选，Enter 确认），或点下方胶囊
+    # CLI：
+    super-agent submit "写一段 v2.1 更新说明" --skill release-notes
+    # API：
+    POST /api/tasks/async  {"message": "...", "skills": ["release-notes"]}
+
+    super-agent skills        # 列出已安装技能
+    GET  /api/skills          # 同上，含加载失败的原因
+
+没选中的技能只以一行简介出现在提示词里，模型觉得对得上可以自己用
+`skill_read` 打开 —— 所以"用户没选但正好相关"的情况也能处理。
+
+See [技能文档](docs/skills.md) for the SKILL.md format, bundled resources and
+the load-failure contract.
 
 ## Real model integration test
 

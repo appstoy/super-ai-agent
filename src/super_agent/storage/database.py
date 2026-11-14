@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
-from sqlalchemy import create_engine, event, inspect
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -51,7 +51,54 @@ def create_schema(engine: Engine) -> None:
     """
 
     Base.metadata.create_all(engine)
+    _ensure_columns(engine)
     _ensure_indexes(engine)
+
+
+def _ensure_columns(engine: Engine) -> None:
+    """Add columns that an existing database is missing.
+
+    `create_all` creates missing *tables* but never alters an existing one, so
+    adding a field to a model (execution telemetry, for instance) would break
+    every upgraded checkout with "no such column". This adds the missing columns
+    idempotently with a conservative default; Alembic stays the authority for
+    managed deployments.
+    """
+
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+    preparer = engine.dialect.identifier_preparer
+    for table in Base.metadata.sorted_tables:
+        if table.name not in existing_tables:
+            continue
+        present = {column["name"] for column in inspector.get_columns(table.name)}
+        for column in table.columns:
+            if column.name in present:
+                continue
+            try:
+                column_type = column.type.compile(dialect=engine.dialect)
+                # A NOT NULL column needs a value for the rows that already
+                # exist, so give it the scalar default when the model declares
+                # one and a type-appropriate zero otherwise. Only literal
+                # defaults are supported; a callable default (now(), uuid4())
+                # cannot be inlined into DDL.
+                default = ""
+                raw_default = getattr(column.default, "arg", None)
+                if isinstance(raw_default, (int, float)) and not isinstance(raw_default, bool):
+                    default = f" DEFAULT {raw_default}"
+                elif isinstance(raw_default, str):
+                    escaped = raw_default.replace("'", "''")
+                    default = f" DEFAULT '{escaped}'"
+                elif not column.nullable:
+                    default = " DEFAULT 0" if "INT" in column_type.upper() else " DEFAULT ''"
+                statement = (
+                    f"ALTER TABLE {preparer.quote(table.name)} "
+                    f"ADD COLUMN {preparer.quote(column.name)} {column_type}{default}"
+                )
+                with engine.begin() as connection:
+                    connection.execute(text(statement))
+            except Exception:  # noqa: BLE001 - a failed migration must not block startup
+                pass
 
 
 def _ensure_indexes(engine: Engine) -> None:

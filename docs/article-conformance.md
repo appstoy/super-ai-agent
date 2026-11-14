@@ -1,6 +1,8 @@
 # 文章符合性矩阵
 
 对照 `super-agent-article-fulltext.md`（《Super-agent 设计探索》）逐节核对实现。
+
+> 该文为 DeepSeek 产品部于 2026-10-31 发布的第三方文章，全文不随本仓库分发，仅在本地保留作参考；本文档只记录本项目自身的实现核对结论。
 验证基线：`236 passed, 1 skipped`（真实模型集成测试需凭证），`ruff check src tests tools`、
 `mypy src tools`、Alembic `0006` upgrade/downgrade/upgrade 均通过；BYOM 链路已做真实进程冒烟；
 §7 两个实验已可复现运行，结果见 `docs/experiments/`。

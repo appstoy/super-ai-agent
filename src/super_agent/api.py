@@ -41,6 +41,7 @@ from super_agent.errors import AgentError
 from super_agent.ingress.schemas import TriggerInput
 from super_agent.policies.speculative_runner import SpeculativeRunner
 from super_agent.ports.model import ChatMessage, MessageRole, ModelGateway, ModelRequest
+from super_agent.skills.loader import SkillRegistry
 from super_agent.storage.database import (
     create_engine_for_url,
     create_schema,
@@ -52,6 +53,7 @@ from super_agent.storage.models import (
     DeviceRecord,
     OutboxMessage,
     RunRecord,
+    TaskFlagRecord,
     TaskRecord,
     TriggerRecord,
     WorkerContextRecord,
@@ -87,6 +89,24 @@ class TaskRequest(BaseModel):
     thread_id: UUID | None = None
     actor: str = Field(default="web-user", min_length=1, max_length=255)
     dedupe_key: str | None = Field(default=None, max_length=255)
+    # Names of skills the user picked for THIS task. The Worker inlines their
+    # instructions into the prompt; an unknown name is reported, never ignored.
+    skills: list[str] = Field(default_factory=list, max_length=16)
+
+
+class TaskFlagRequest(BaseModel):
+    """Partial update of a card's presentation flags.
+
+    A module-level model, not a nested one: a class defined inside the endpoint
+    is not a recognised Pydantic parameter type, so FastAPI reads the body as a
+    missing query field and rejects every request with 422.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    pinned: bool | None = None
+    archived: bool | None = None
+    color: str | None = Field(default=None, max_length=16)
 
 
 class WebhookRequest(BaseModel):
@@ -97,6 +117,21 @@ class WebhookRequest(BaseModel):
     thread_id: UUID | None = None
     actor: str = Field(default="webhook", min_length=1, max_length=255)
     dedupe_key: str | None = Field(default=None, max_length=255)
+
+
+def _task_payload(message: str, model_name: str | None, skills: list[str]) -> dict[str, object]:
+    """Build the trigger payload, including the skills the user selected.
+
+    Skills travel in the payload (not in the message text) so the Router title
+    and the model's user message stay exactly what the person typed; the Worker
+    reads the selection separately and inlines it into the system prompt.
+    """
+
+    payload: dict[str, object] = {"message": message, "model": model_name}
+    chosen = [name.strip() for name in skills if name and name.strip()]
+    if chosen:
+        payload["skills"] = chosen
+    return payload
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -116,6 +151,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     agent_tools, agent_capabilities, tool_load_report = build_agent_tools(
         active_settings, workspace_root=workspace_root
     )
+    # The same registry instance the skill_* tools read from, so what the user
+    # picks and what the model can browse never disagree.
+    skill_registry = SkillRegistry(tool_load_report.skills.skills)
     recall_tool = RecallTool(runtime_factory)
     tool_runner = DurableToolRunner(runtime_factory, agent_tools)
     agent_runner = BackgroundAgentRunner(
@@ -125,6 +163,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         tool_runner=tool_runner,
         recall_tool=recall_tool,
         max_rounds=active_settings.worker_max_rounds,
+        skills=skill_registry,
     )
 
     def build_gateway(model_name: str | None) -> ModelGateway:
@@ -161,6 +200,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             DeliveryService([CliChannelAdapter()]),
             tools=agent_tools,
             granted_capabilities=agent_capabilities,
+            skills=skill_registry,
         )
     durable_worker = DurableOutboxWorker(
         runtime_factory,
@@ -172,6 +212,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         speculative_runner=speculative_runner,
         batch_limit=active_settings.router_batch_limit,
         max_rounds=active_settings.worker_max_rounds,
+        skills=skill_registry,
     )
     recovery_stop = Event()
     recovery_thread = Thread(
@@ -267,6 +308,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         """Report built-in, user-loaded and failed tools without exposing secrets."""
 
         return tool_load_report.to_dict()
+
+    @app.get("/api/skills")
+    def list_skills() -> dict[str, object]:
+        """List selectable skills so the page can offer them.
+
+        Load failures are included too: a skill that silently fails to appear
+        is impossible to debug from the UI, and the fix (usually a missing
+        description) is something the user can act on.
+        """
+
+        report = tool_load_report.skills
+        return {
+            "enabled": active_settings.skills_enabled,
+            "skills": [skill.to_dict() for skill in report.skills],
+            "failed": [list(item) for item in report.failed],
+            "count": len(report.skills),
+        }
 
     @app.get("/api/config")
     def config_summary() -> dict[str, object]:
@@ -540,6 +598,66 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         return {"artifacts": artifacts, "count": len(artifacts)}
 
+    @app.patch("/api/tasks/{task_id}/flags")
+    def set_task_flags(task_id: UUID, request: TaskFlagRequest) -> dict[str, object]:
+        """Set the presentation flags a user owns for one card.
+
+        Pin, archive and colour describe how a person arranges their own view,
+        not what the runtime did, so they live in their own table and never
+        touch the task's lifecycle fields.
+        """
+
+        allowed = {"", "red", "orange", "yellow", "green", "blue", "purple", "gray"}
+        if request.color is not None and request.color not in allowed:
+            raise HTTPException(
+                status_code=422,
+                detail=f"color must be one of {sorted(allowed)}",
+            )
+
+        engine = create_engine_for_url(database_url)
+        factory = create_session_factory(engine)
+        try:
+            with session_scope(factory) as session:
+                task = session.get(TaskRecord, task_id)
+                if task is None:
+                    raise HTTPException(status_code=404, detail="task not found")
+                flag = session.get(TaskFlagRecord, task_id)
+                if flag is None:
+                    flag = TaskFlagRecord(task_id=task_id)
+                    session.add(flag)
+                if request.pinned is not None:
+                    flag.pinned = 1 if request.pinned else 0
+                if request.archived is not None:
+                    flag.archived = 1 if request.archived else 0
+                if request.color is not None:
+                    flag.color = request.color
+                session.flush()
+                return {
+                    "task_id": str(task_id),
+                    "pinned": bool(flag.pinned),
+                    "archived": bool(flag.archived),
+                    "color": flag.color,
+                }
+        finally:
+            engine.dispose()
+
+    @app.delete("/api/files")
+    def delete_workspace_file(path: str) -> dict[str, object]:
+        """Remove one generated artifact from disk.
+
+        Scoped to the workspace like every other file endpoint, and refused for
+        directories so a stray request cannot wipe a task's whole folder.
+        """
+
+        target = _workspace_file(path)
+        if target.is_dir():
+            raise HTTPException(status_code=400, detail="path is a directory")
+        try:
+            target.unlink()
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=f"could not delete: {exc}") from exc
+        return {"path": path, "deleted": True}
+
     @app.get("/files/{path:path}", response_class=HTMLResponse)
     def serve_workspace_file(path: str) -> HTMLResponse:
         """Serve a workspace artifact directly so HTML previews actually render."""
@@ -702,7 +820,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             source="web",
             actor=request.actor,
             thread_id=thread_id,
-            payload={"message": request.message, "model": model_name},
+            payload=_task_payload(request.message, model_name, request.skills),
             occurred_at=datetime.now(UTC),
             dedupe_key=request.dedupe_key or f"web:{thread_id}:{request.message}",
         )
@@ -719,6 +837,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     tool_runner=tool_runner,
                     recall_tool=recall_tool,
                     max_rounds=active_settings.worker_max_rounds,
+                    skills=skill_registry,
                 ).submit_via_outbox(trigger_input)
         except AgentError as exc:
             # A provider timeout is an outcome, not a server crash: report the
@@ -754,7 +873,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             source="web",
             actor=request.actor,
             thread_id=thread_id,
-            payload={"message": request.message, "model": model_name},
+            payload=_task_payload(request.message, model_name, request.skills),
             occurred_at=datetime.now(UTC),
             dedupe_key=dedupe_key,
         )
@@ -789,7 +908,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             source=source,
             actor=request.actor,
             thread_id=thread_id,
-            payload={"message": request.message, "model": model_name},
+            # A webhook has no skill picker; keep the plain payload so the signed
+            # canonical body never grows a field silently.
+            payload=_task_payload(request.message, model_name, []),
             occurred_at=datetime.now(UTC),
             dedupe_key=dedupe_key,
         )

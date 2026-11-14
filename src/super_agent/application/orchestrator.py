@@ -49,6 +49,7 @@ from super_agent.ports.context import ContextBuildRequest, ContextCandidate
 from super_agent.ports.model import ChatMessage, MessageRole, ModelGateway, ModelRequest, ModelTool
 from super_agent.ports.tool import ExecutionContext, Tool, ToolResult
 from super_agent.ports.tool_names import normalize_tool_name, resolve_tool_name
+from super_agent.skills.loader import Skill, SkillRegistry, select_skills
 from super_agent.storage.models import (
     DeliveryRecord,
     OutboxMessage,
@@ -122,6 +123,64 @@ _ARTIFACT_HINTS = (
 )
 
 
+# A model that gave up used to narrate its own limits into the conversation
+# ("I don't have the ability to write files, please save this yourself"). That
+# text is durable context, so continuing the thread fed the next turn a reason
+# to refuse again. These phrases mark such a turn as noise rather than history.
+_SELF_DEFEATING_PHRASES = (
+    "我没有写文件的能力",
+    "没有写文件工具",
+    "当前会话里我做不到",
+    "无法直接写文件",
+    "我无法创建文件",
+    "请手动保存",
+    "请把代码块内容保存",
+    "cannot write files",
+    "don't have the ability to write",
+    "do not have the ability to write",
+    "no file writing capability",
+    "unable to create files",
+)
+
+
+def _is_self_defeating_answer(role: str, content: str) -> bool:
+    """True when an assistant turn is a refusal rather than real progress.
+
+    Dropping these from the replayed history keeps a continued thread from
+    inheriting the previous turn's excuse. Only assistant turns qualify: a
+    user's own message is never filtered, and a tool result is evidence.
+    """
+
+    if role != "assistant":
+        return False
+    lowered = str(content or "").lower()
+    return any(phrase in lowered for phrase in _SELF_DEFEATING_PHRASES)
+
+
+def _run_input_ref(trigger_id: UUID, payload: dict[str, object] | None) -> str:
+    """Persist the task's input metadata without changing the schema.
+
+    The trigger row only keeps the raw message text, so a skill selection used
+    to vanish the moment the request returned: the UI could not confirm what
+    was applied and a resumed Run had no record of it. ``RunRecord.input_ref``
+    is permanent and already stores a trigger reference, so keep that prefix
+    and append the selection as a compact JSON suffix.
+    """
+
+    raw = (payload or {}).get("skills")
+    names: list[str] = []
+    if isinstance(raw, str):
+        names = [raw.strip()] if raw.strip() else []
+    elif isinstance(raw, (list, tuple, set, frozenset)):
+        names = list(dict.fromkeys(str(item).strip() for item in raw if str(item).strip()))
+    if not names:
+        return f"trigger:{trigger_id}"
+    return (
+        f"trigger:{trigger_id}|"
+        + json.dumps({"skills": names}, ensure_ascii=False, separators=(",", ":"))
+    )
+
+
 def _looks_like_file_deliverable(text: str) -> bool:
     """Heuristically detect a request that must end with a file on disk."""
 
@@ -177,6 +236,9 @@ class AgentOrchestrator:
         task_workspaces: bool = True,
         workspace_root: Path | None = None,
         cache_dir_name: str = DEFAULT_CACHE_DIR_NAME,
+        # Skills the user can choose per task. Empty means no skill library is
+        # wired in, which must behave exactly like the pre-skill runtime.
+        skills: SkillRegistry | None = None,
     ) -> None:
         if max_rounds < 1:
             raise ValueError("max_rounds must be positive")
@@ -216,6 +278,7 @@ class AgentOrchestrator:
             Path(workspace_root) if workspace_root is not None else default_root
         )
         self._cache_dir_name = cache_dir_name or default_cache
+        self._skills = skills
 
     def submit(
         self, trigger_input: TriggerInput, *, enqueue_outbox: bool = True
@@ -329,6 +392,7 @@ class AgentOrchestrator:
         recall_tool: Tool | None = None,
         delivery: DeliveryService | None = None,
         max_rounds: int = 12,
+        skills: SkillRegistry | None = None,
     ) -> AgentRunResult:
         """Re-enter the same runtime from a claimed trigger.received event.
 
@@ -350,6 +414,7 @@ class AgentOrchestrator:
             recall_tool=recall_tool,
             delivery=delivery,
             max_rounds=max_rounds,
+            skills=skills,
         ).submit(trigger_input, enqueue_outbox=topic != "tool.completed")
 
     def process(
@@ -529,7 +594,7 @@ class AgentOrchestrator:
                 trigger_id=trigger.id,
                 status="pending",
                 attempt=self._next_attempt(route.task.id, trigger.id),
-                input_ref=f"trigger:{trigger.id}",
+                input_ref=_run_input_ref(trigger.id, payload),
             )
         )
         self._session.flush()
@@ -623,6 +688,14 @@ class AgentOrchestrator:
             run.finished_at = datetime.now(UTC)
             run.lease_owner = None
             run.lease_expires_at = None
+            # Persist telemetry so the result can explain its own cost and
+            # speed without reading logs: rounds, tokens, cache hits, tools.
+            metrics = runtime.metrics
+            run.model_rounds = metrics.model_rounds
+            run.prompt_tokens = metrics.prompt_tokens
+            run.completion_tokens = metrics.completion_tokens
+            run.cached_tokens = metrics.cached_tokens
+            run.tool_calls_count = metrics.tool_calls
             run.version += 1
         self._session.flush()
         return AgentRunResult(
@@ -826,7 +899,7 @@ class AgentOrchestrator:
                 trigger_id=trigger.id,
                 status="pending",
                 attempt=self._next_attempt(task_record.id, trigger.id),
-                input_ref=f"trigger:{trigger.id}",
+                input_ref=_run_input_ref(trigger.id, payload),
             )
         )
         self._session.flush()
@@ -912,6 +985,14 @@ class AgentOrchestrator:
             run.finished_at = datetime.now(UTC)
             run.lease_owner = None
             run.lease_expires_at = None
+            # Persist telemetry so the result can explain its own cost and
+            # speed without reading logs: rounds, tokens, cache hits, tools.
+            metrics = runtime.metrics
+            run.model_rounds = metrics.model_rounds
+            run.prompt_tokens = metrics.prompt_tokens
+            run.completion_tokens = metrics.completion_tokens
+            run.cached_tokens = metrics.cached_tokens
+            run.tool_calls_count = metrics.tool_calls
             run.version += 1
         self._session.flush()
         return AgentRunResult(
@@ -1025,8 +1106,17 @@ class AgentOrchestrator:
         # turns. Durable history is folded into ONE user message; the transcript
         # must not be re-injected on every round or the model sees a wall of
         # duplicated text instead of a proper assistant/tool exchange.
+        selected_skills, missing_skills = self._skills_for_payload(payload)
         conversation: list[ChatMessage] = [
-            ChatMessage(MessageRole.SYSTEM, self._system_prompt(model_tools, task_dir)),
+            ChatMessage(
+                MessageRole.SYSTEM,
+                self._system_prompt(
+                    model_tools,
+                    task_dir,
+                    selected=selected_skills,
+                    missing=missing_skills,
+                ),
+            ),
             ChatMessage(MessageRole.USER, self._durable_context(runtime, trigger, payload_text)),
         ]
         nudges = 0
@@ -1053,6 +1143,15 @@ class AgentOrchestrator:
             # so renew it from a background thread while this call is in flight.
             with self._lease_keepalive(run_id, lease_owner):
                 response = self._model.complete(model_request)
+            # Capture token usage at the moment of the call: it exists nowhere
+            # else, and a follow-up turn on the same thread should visibly show
+            # its prompt-cache hits instead of looking identical to a cold run.
+            usage = response.usage
+            runtime.metrics.record_model_call(
+                prompt_tokens=usage.prompt_tokens,
+                completion_tokens=usage.completion_tokens,
+                cached_tokens=usage.cached_tokens,
+            )
             if not response.tool_calls:
                 # A file task can end with prose only for three reasons: the
                 # provider ignored tool_choice, a call failed ("tool is not
@@ -1125,6 +1224,7 @@ class AgentOrchestrator:
                     available=tuple(tool.name for tool in model_tools),
                     workspace_dir=task_dir,
                 )
+                runtime.metrics.record_tool_call()
                 runtime.append_context(
                     ContextEntry(
                         role="tool",
@@ -1284,6 +1384,7 @@ class AgentOrchestrator:
             entry
             for entry in runtime.context.entries
             if dict(entry.metadata).get("trigger_id") != str(trigger.id)
+            and not _is_self_defeating_answer(entry.role, entry.content)
         ]
         if not earlier:
             return payload_text
@@ -1410,10 +1511,79 @@ class AgentOrchestrator:
             for entry in runtime.context.entries
         )
 
-    @staticmethod
+    def _skills_for_payload(
+        self, payload: dict[str, object]
+    ) -> tuple[tuple[Skill, ...], tuple[str, ...]]:
+        """Resolve the skills the user picked for this task.
+
+        An unknown name is reported rather than dropped: silently running
+        without the playbook the user chose is worse than saying it is missing.
+        """
+
+        if self._skills is None:
+            return (), ()
+        raw = payload.get("skills")
+        requested: list[str] = []
+        if isinstance(raw, str):
+            requested = [raw]
+        elif isinstance(raw, (list, tuple, set, frozenset)):
+            requested = [str(item) for item in raw]
+        if not requested:
+            return (), ()
+        return select_skills(self._skills, requested)
+
+    def _skill_prompt_block(
+        self,
+        selected: Sequence[Skill],
+        missing: Sequence[str],
+    ) -> list[str]:
+        """Render the skill section of the system prompt.
+
+        Only the catalogue (one line per skill) is always present; a selected
+        skill's full body is inlined because the user explicitly asked for it.
+        Everything else stays behind skill_read, which is what keeps a large
+        library from eating the context window on every task.
+        """
+
+        if self._skills is None or len(self._skills) == 0:
+            return []
+        lines = [
+            "Skills are reusable playbooks of instructions, not tools. "
+            "Available skills:\n" + self._skills.catalogue(),
+            "When a skill clearly matches the request, call skill_read with its name and "
+            "follow its instructions. Reading a skill is cheap; guessing at a procedure "
+            "is not.",
+        ]
+        if selected:
+            lines.append(
+                "The user selected these skills for this task. Their instructions are "
+                "authoritative for HOW to do the work:"
+            )
+            for skill in selected:
+                lines.append(
+                    "=== skill: " + skill.name + " ===\n" + skill.body
+                    + "\n=== end skill: " + skill.name + " ==="
+                )
+                if skill.resources:
+                    lines.append(
+                        "Bundled resources you may read with skill_read(resource=...): "
+                        + ", ".join(skill.resources)
+                    )
+        if missing:
+            lines.append(
+                "The user asked for skills that are not installed: "
+                + ", ".join(missing)
+                + ". Do not pretend to follow them; say so in your answer."
+            )
+        return lines
+
     def _system_prompt(
+        self,
         model_tools: Sequence[ModelTool],
         task_dir: Path | None = None,
+        *,
+        selected: Sequence[Skill] = (),
+        missing: Sequence[str] = (),
     ) -> str:
         """Describe the real toolset, including write access.
 
@@ -1461,6 +1631,7 @@ class AgentOrchestrator:
             "If a tool call fails, its error is returned as the tool result; read it, fix the "
             "arguments or the name, and try again."
         )
+        lines.extend(self._skill_prompt_block(selected, missing))
         return " ".join(lines)
 
     @staticmethod

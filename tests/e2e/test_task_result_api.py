@@ -189,3 +189,40 @@ def test_result_projection_survives_a_stopped_task(tmp_path, monkeypatch) -> Non
         assert body["status"] in {"succeeded", "cancelled", "failed", "timed_out"}
         assert body["conclusion"]
         json.dumps(body)
+
+
+def test_result_reports_which_skills_were_applied(tmp_path, monkeypatch) -> None:
+    """The user picked a skill; the result must confirm it actually applied.
+
+    Without this, a dropped payload key looks exactly like a working skill:
+    the task succeeds, but with generic instructions.
+    """
+
+    with _client(tmp_path, monkeypatch) as client:
+        created = client.post(
+            "/api/tasks",
+            json={
+                "message": "写个页面",
+                "model": "test-model",
+                "thread_id": str(uuid4()),
+                "skills": ["html-page", "release-notes"],
+            },
+        )
+        assert created.status_code == 200, created.text
+        task_id = created.json()["task_id"]
+
+        body = client.get(f"/api/tasks/{task_id}/result").json()
+
+    assert body["skills"] == ["html-page", "release-notes"]
+    # The deep trace must show it too, so expanding the card answers "did my
+    # choice actually get applied?" without requiring a code dive.
+    labels = [d["label"] for s in body["steps"] for d in s.get("details", [])]
+    assert "套用的技能" in labels
+
+
+def test_result_has_empty_skills_for_a_plain_task(tmp_path, monkeypatch) -> None:
+    with _client(tmp_path, monkeypatch) as client:
+        task_id = _submit(client, "写个页面")
+        body = client.get(f"/api/tasks/{task_id}/result").json()
+
+    assert body["skills"] == []

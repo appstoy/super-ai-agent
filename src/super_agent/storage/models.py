@@ -106,6 +106,15 @@ class RunRecord(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     lease_owner: Mapped[str | None] = mapped_column(String(255))
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Execution telemetry, aggregated across every model call in this Run.
+    # These answer "why was this slow / expensive?" without reading logs:
+    # model_rounds counts model calls, and the token fields separate fresh
+    # input from prompt-cache hits so a continued thread visibly reuses context.
+    model_rounds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cached_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    tool_calls_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class WorkerEventRecord(Base):
@@ -263,4 +272,32 @@ class DeviceRecord(Base):
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+
+
+class TaskFlagRecord(Base):
+    """User-owned presentation state for one card (pin, archive, colour).
+
+    Deliberately a separate table rather than columns on ``tasks``: these are
+    cosmetic preferences a person sets on their own view, not runtime facts
+    about the work. Keeping them apart means a task can be re-run, retried or
+    reconciled without its pin state being touched, and a database that has
+    never seen a flag behaves exactly as before.
+
+    A row exists only once a user changes something, so an untouched task costs
+    nothing to store.
+    """
+
+    __tablename__ = "task_flags"
+
+    task_id: Mapped[UUID] = mapped_column(primary_key=True)
+    pinned: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    archived: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # One of: "" (no colour), red, orange, yellow, green, blue, purple, gray.
+    color: Mapped[str] = mapped_column(String(16), nullable=False, default="")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )

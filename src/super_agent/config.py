@@ -44,6 +44,10 @@ class Settings:
     tool_manifest: str = ""
     tool_modules: str = ""
     tool_paths: str = ""
+    # Skills are instruction playbooks (not callable tools). They live in
+    # folders containing SKILL.md; empty means "<workspace_root>/skills".
+    skills_enabled: bool = True
+    skill_paths: str = ""
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -105,6 +109,9 @@ class Settings:
             tool_manifest=os.getenv("SUPER_AGENT_TOOL_MANIFEST", defaults.tool_manifest),
             tool_modules=os.getenv("SUPER_AGENT_TOOL_MODULES", defaults.tool_modules),
             tool_paths=os.getenv("SUPER_AGENT_TOOL_PATHS", defaults.tool_paths),
+            skills_enabled=os.getenv("SUPER_AGENT_SKILLS_ENABLED", "1").lower()
+            not in {"0", "false", "no"},
+            skill_paths=os.getenv("SUPER_AGENT_SKILL_PATHS", defaults.skill_paths),
         )
 
 def _positive_int(raw: str | None, default: int) -> int:

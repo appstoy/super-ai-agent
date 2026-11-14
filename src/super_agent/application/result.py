@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from super_agent.storage.models import (
     DeliveryRecord,
     RunRecord,
+    TaskFlagRecord,
     TaskRecord,
     ToolRunRecord,
     TriggerRecord,
@@ -122,6 +123,50 @@ class Step:
 
 
 @dataclass(frozen=True)
+class Metrics:
+    """Execution cost and speed, for the latest attempt and for the thread.
+
+    Two numbers, deliberately: `latest_*` describes the attempt that produced
+    this answer, while `thread_*` sums every attempt on the same thread. A task
+    that failed twice and succeeded on the third try cost all three, and
+    reporting only the successful one would understate what the user spent.
+    """
+
+    duration_seconds: float | None
+    model_rounds: int
+    prompt_tokens: int
+    completion_tokens: int
+    cached_tokens: int
+    tool_calls: int
+    cache_hit_rate: float
+    thread_attempts: int = 0
+    thread_model_rounds: int = 0
+    thread_prompt_tokens: int = 0
+    thread_completion_tokens: int = 0
+    thread_cached_tokens: int = 0
+    thread_tool_calls: int = 0
+    thread_cache_hit_rate: float = 0.0
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "duration_seconds": self.duration_seconds,
+            "model_rounds": self.model_rounds,
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "cached_tokens": self.cached_tokens,
+            "tool_calls": self.tool_calls,
+            "cache_hit_rate": self.cache_hit_rate,
+            "thread_attempts": self.thread_attempts,
+            "thread_model_rounds": self.thread_model_rounds,
+            "thread_prompt_tokens": self.thread_prompt_tokens,
+            "thread_completion_tokens": self.thread_completion_tokens,
+            "thread_cached_tokens": self.thread_cached_tokens,
+            "thread_tool_calls": self.thread_tool_calls,
+            "thread_cache_hit_rate": self.thread_cache_hit_rate,
+        }
+
+
+@dataclass(frozen=True)
 class TaskResult:
     """Everything a user needs to judge and consume one task."""
 
@@ -140,6 +185,11 @@ class TaskResult:
     finished_at: str | None
     duration_seconds: float | None
     open_url: str | None
+    metrics: Metrics
+    pinned: bool = False
+    archived: bool = False
+    color: str = ""
+    skills: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -159,6 +209,11 @@ class TaskResult:
             "finished_at": self.finished_at,
             "duration_seconds": self.duration_seconds,
             "open_url": self.open_url,
+            "metrics": self.metrics.to_dict(),
+            "pinned": self.pinned,
+            "archived": self.archived,
+            "color": self.color,
+            "skills": list(self.skills),
         }
 
 
@@ -268,6 +323,7 @@ def _build_steps(
     tool_runs: list[ToolRunRecord],
     contexts: list[WorkerContextRecord],
     trigger: TriggerRecord | None,
+    skills: tuple[str, ...] = (),
 ) -> list[Step]:
     """Assemble a two-layer timeline: clean headline on top, deep trace inside."""
 
@@ -287,6 +343,11 @@ def _build_steps(
         except (TypeError, json.JSONDecodeError):
             if trigger.payload_ref:
                 trig_details.append(StepDetail("用户原始输入", trigger.payload_ref, badge="Raw"))
+
+        if skills:
+            trig_details.append(
+                StepDetail("套用的技能", "、".join(skills), badge="Skill")
+            )
 
         decision = trigger.filter_decision or "accepted"
         desc = (
@@ -518,6 +579,29 @@ def _conclusion_from(
     return ""
 
 
+def _skills_from_input_ref(value: str) -> tuple[str, ...]:
+    """Read the skill selection that ``_run_input_ref`` recorded on a Run.
+
+    Old Runs carry a bare ``trigger:<uuid>`` reference; those simply have no
+    skills and must not crash an upgraded database.
+    """
+
+    if "|" not in value:
+        return ()
+    try:
+        payload = json.loads(value.split("|", 1)[1])
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return ()
+    if not isinstance(payload, dict):
+        return ()
+    raw = payload.get("skills")
+    if isinstance(raw, str):
+        return (raw,) if raw.strip() else ()
+    if isinstance(raw, list):
+        return tuple(dict.fromkeys(str(item).strip() for item in raw if str(item).strip()))
+    return ()
+
+
 def build_task_result(
     session: Session,
     task: TaskRecord,
@@ -554,7 +638,22 @@ def build_task_result(
     )
     delivery = session.scalar(select(DeliveryRecord).where(DeliveryRecord.task_id == task.id))
 
+    # Presentation flags are optional: a task nobody has touched has no row.
+    flag = session.get(TaskFlagRecord, task.id)
+    pinned = bool(flag.pinned) if flag is not None else False
+    archived = bool(flag.archived) if flag is not None else False
+    color = str(flag.color or "") if flag is not None else ""
+
     latest = runs[-1] if runs else None
+    # Skills are recorded on the Run, not the Trigger: the trigger row keeps
+    # only the raw message text, so a selection stored there would vanish on a
+    # resumed attempt and the result could not confirm what was applied.
+    used_skills: tuple[str, ...] = ()
+    for run in reversed(runs):
+        parsed = _skills_from_input_ref(str(run.input_ref or ""))
+        if parsed:
+            used_skills = parsed
+            break
 
     # The Task title is written by the Router, so it can read like an internal
     # instruction ("write the page"). A user recognising their own words is
@@ -570,8 +669,9 @@ def build_task_result(
                 payload = json.loads(trigger.payload_ref)
             except (TypeError, json.JSONDecodeError):
                 payload = None
-            if isinstance(payload, dict) and isinstance(payload.get("message"), str):
-                ask = str(payload["message"])[:2000]
+            if isinstance(payload, dict):
+                if isinstance(payload.get("message"), str):
+                    ask = str(payload["message"])[:2000]
             elif trigger.payload_ref.strip():
                 ask = trigger.payload_ref.strip()[:2000]
 
@@ -585,7 +685,7 @@ def build_task_result(
     raw_conclusion = _conclusion_from(contexts, delivery, events)
     artifacts = _collect_artifacts(workspace_root, cache_dir_name, task_id)
 
-    steps = _build_steps(events, list(tool_runs), contexts, trigger)
+    steps = _build_steps(events, list(tool_runs), contexts, trigger, used_skills)
 
     started = _as_utc(latest.started_at) if latest is not None else None
     finished = _as_utc(latest.finished_at) if latest is not None else None
@@ -625,6 +725,38 @@ def build_task_result(
         except (TypeError, json.JSONDecodeError):
             pass
 
+    # Telemetry comes from the newest Run: older attempts describe work that was
+    # discarded, so mixing them in would misreport what this task actually cost.
+    prompt_tokens = int(latest.prompt_tokens or 0) if latest is not None else 0
+    cached_tokens = int(latest.cached_tokens or 0) if latest is not None else 0
+    hit_rate = round(min(1.0, cached_tokens / prompt_tokens), 4) if prompt_tokens > 0 else 0.0
+
+    # A task that failed twice and succeeded on the third attempt cost all
+    # three, so the thread totals sum every attempt rather than only the one
+    # that happened to produce this answer. Reporting the successful attempt
+    # alone understated real spend by an order of magnitude on a retried task.
+    thread_prompt = sum(int(run.prompt_tokens or 0) for run in runs)
+    thread_cached = sum(int(run.cached_tokens or 0) for run in runs)
+    thread_rate = (
+        round(min(1.0, thread_cached / thread_prompt), 4) if thread_prompt > 0 else 0.0
+    )
+    metrics = Metrics(
+        duration_seconds=duration,
+        model_rounds=int(latest.model_rounds or 0) if latest is not None else 0,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=int(latest.completion_tokens or 0) if latest is not None else 0,
+        cached_tokens=cached_tokens,
+        tool_calls=int(latest.tool_calls_count or 0) if latest is not None else 0,
+        cache_hit_rate=hit_rate,
+        thread_attempts=len(runs),
+        thread_model_rounds=sum(int(run.model_rounds or 0) for run in runs),
+        thread_prompt_tokens=thread_prompt,
+        thread_completion_tokens=sum(int(run.completion_tokens or 0) for run in runs),
+        thread_cached_tokens=thread_cached,
+        thread_tool_calls=sum(int(run.tool_calls_count or 0) for run in runs),
+        thread_cache_hit_rate=thread_rate,
+    )
+
     return TaskResult(
         task_id=task_id,
         thread_id=resolved_thread_id,
@@ -641,4 +773,9 @@ def build_task_result(
         finished_at=_iso(finished),
         duration_seconds=duration,
         open_url=open_url,
+        metrics=metrics,
+        pinned=pinned,
+        archived=archived,
+        color=color,
+        skills=used_skills,
     )

@@ -26,6 +26,7 @@ from super_agent.ingress.service import TriggerIngressService
 from super_agent.policies.speculative_runner import SpeculativeRunner, should_speculate
 from super_agent.ports.model import ModelGateway
 from super_agent.ports.tool import Tool
+from super_agent.skills.loader import SkillRegistry
 from super_agent.storage.models import OutboxMessage
 from super_agent.storage.outbox import OutboxRepository
 from super_agent.tools.registry import ToolRegistry
@@ -52,6 +53,7 @@ class BackgroundAgentRunner:
         tool_runner: DurableToolRunner | None = None,
         recall_tool: Tool | None = None,
         max_rounds: int = 12,
+        skills: SkillRegistry | None = None,
     ) -> None:
         self._factory = factory
         self._tools = tools
@@ -61,6 +63,7 @@ class BackgroundAgentRunner:
         self._futures: dict[str, Future[AgentRunResult]] = {}
         self._tool_runner = tool_runner
         self._recall_tool = recall_tool
+        self._skills = skills
 
     def submit(self, trigger_input: TriggerInput, gateway: ModelGateway) -> BackgroundSubmission:
         """Queue a trigger for the same Outbox -> Router -> Worker path."""
@@ -99,6 +102,7 @@ class BackgroundAgentRunner:
                     detach_execution=True,
                     tool_runner=self._tool_runner,
                     recall_tool=self._recall_tool,
+                    skills=self._skills,
                 ).submit_via_outbox(trigger_input)
                 session.commit()
                 return result
@@ -162,6 +166,7 @@ class DurableOutboxWorker:
         speculative_runner: SpeculativeRunner | None = None,
         batch_limit: int = 1,
         max_rounds: int = 12,
+        skills: SkillRegistry | None = None,
         max_attempts: int = MAX_OUTBOX_ATTEMPTS,
         retry_backoff_seconds: float = 1.0,
     ) -> None:
@@ -180,6 +185,7 @@ class DurableOutboxWorker:
         self._speculative_runner = speculative_runner
         self._batch_limit = batch_limit
         self._max_rounds = max_rounds
+        self._skills = skills
         self._max_attempts = max_attempts
         self._retry_backoff_seconds = retry_backoff_seconds
         self.router_metrics: dict[str, float | int] = {}
@@ -222,6 +228,7 @@ class DurableOutboxWorker:
                         tool_runner=self._tool_runner,
                         recall_tool=self._recall_tool,
                         max_rounds=self._max_rounds,
+                        skills=self._skills,
                     )
 
                 message = OutboxProcessor(
@@ -325,6 +332,7 @@ class DurableOutboxWorker:
                     tool_runner=self._tool_runner,
                     recall_tool=self._recall_tool,
                     max_rounds=self._max_rounds,
+                    skills=self._skills,
                 )
                 for message, payload in claimed:
                     try:

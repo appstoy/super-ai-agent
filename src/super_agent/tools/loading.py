@@ -24,6 +24,11 @@ from super_agent.config import Settings
 from super_agent.errors import ConfigurationError, ValidationError
 from super_agent.ports.tool import ExecutionContext, Tool, ToolEffect, ToolResult, ToolSpec
 from super_agent.security.policy import ToolPolicy, ToolRisk
+from super_agent.skills.loader import (
+    SkillLoadReport,
+    build_skill_registry,
+)
+from super_agent.skills.tools import SkillListTool, SkillReadTool
 from super_agent.tools.registry import ToolRegistry
 from super_agent.tools.restricted import ListFilesTool, ReadFileTool, WriteFileTool
 
@@ -58,6 +63,7 @@ class ToolLoadReport:
     failed: tuple[tuple[str, str], ...] = ()
     capabilities: frozenset[str] = frozenset()
     registry: ToolRegistry | None = field(default=None, compare=False, repr=False)
+    skills: SkillLoadReport = field(default_factory=SkillLoadReport, compare=False)
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -65,6 +71,7 @@ class ToolLoadReport:
             "loaded": list(self.loaded),
             "failed": [list(item) for item in self.failed],
             "capabilities": sorted(self.capabilities),
+            "skills": self.skills.to_dict(),
         }
 
 
@@ -428,6 +435,23 @@ def resolve_tool_specs(settings: Settings) -> list[object]:
     return found
 
 
+def resolve_skill_roots(settings: Settings, workspace_root: Path) -> list[Path]:
+    """Return every directory that may contain skills, project first.
+
+    Default is <workspace_root>/skills so a project ships its own playbooks
+    next to the code that needs them; SUPER_AGENT_SKILL_PATHS adds more
+    (separated by the OS path separator). A path may point at a library folder
+    or at one individual skill folder.
+    """
+
+    roots: list[Path] = [workspace_root / "skills"]
+    for item in settings.skill_paths.split(os.pathsep):
+        text = item.strip()
+        if text:
+            roots.append(Path(text).expanduser())
+    return roots
+
+
 def build_agent_tools(
     settings: Settings,
     *,
@@ -459,4 +483,35 @@ def build_agent_tools(
         builtin_registry=registry,
         base_capabilities=base_capabilities,
     )
-    return registry, report.capabilities, report
+
+    # Skills are instruction playbooks, not callable actions, but the Worker
+    # still needs a way to discover and read them mid-task: a request can match
+    # a skill nobody preselected. Registering these two read-only tools costs
+    # nothing when the library is empty and keeps selection optional.
+    skills, skill_report = build_skill_registry(
+        resolve_skill_roots(settings, root), enabled=settings.skills_enabled
+    )
+    capabilities = set(report.capabilities)
+    builtin_names = report.builtin
+    if len(skills) > 0:
+        registry.register(SkillListTool(skills))
+        registry.register(SkillReadTool(skills))
+        capabilities.add("skill.read")
+        # /api/tools must agree with what the model can actually call. Skill
+        # tools are runtime-provided, so append them to the builtin list rather
+        # than re-snapshotting the registry (which would also sweep user tools
+        # into "builtin" and break that field's meaning).
+        builtin_names = (*report.builtin, "skill.list", "skill.read")
+
+    return (
+        registry,
+        frozenset(capabilities),
+        ToolLoadReport(
+            builtin=builtin_names,
+            loaded=report.loaded,
+            failed=report.failed,
+            capabilities=frozenset(capabilities),
+            registry=report.registry,
+            skills=skill_report,
+        ),
+    )

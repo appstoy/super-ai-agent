@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+- **Typing `/` in the composer now opens the skill list.** The chips were the
+  only way to pick a skill, which meant scanning a row below the box. A `/`
+  token at the start of the current word opens a menu under the cursor with
+  live filtering (`/rel`), arrow keys + `Enter` to pick, `Esc` to dismiss.
+  Picking removes the `/token` so the message stays exactly what the user meant,
+  and the choice appears as a removable tag above the input. A slash anywhere
+  else (a URL, `a/b`) is left alone as prose. The menu and the chip row write to
+  the same selection set, so they cannot diverge. Verified in real headless
+  Chrome: `node tools/verification/check_slash_menu.mjs` (12/12).
+
+- **Skills: user-selectable instruction playbooks.** The runtime had tools but
+  no way to teach it *how* to do a class of job, so every task started from the
+  same generic system prompt. A skill is now a folder with `SKILL.md`
+  (frontmatter + instructions + optional bundled resources), discovered from
+  `<workspace_root>/skills` and `SUPER_AGENT_SKILL_PATHS`:
+  - The composer has a skill bar; the selection travels in the task payload and
+    the Worker inlines those bodies into the system prompt. `--skill` does the
+    same on the CLI, `"skills": [...]` on `POST /api/tasks`.
+  - The one-line catalogue is in *every* system prompt, and `skill.list` /
+    `skill_read` are registered whenever a library exists, so a request that
+    matches a skill nobody picked can still be handled. Unselected bodies stay
+    out of the prompt, so a large library costs no context.
+  - `GET /api/skills` lists what is selectable and what failed to load, with
+    the reason. A skill with no `description` is rejected: it would be
+    invisible in the catalogue and therefore unselectable.
+  - An unknown selected name is reported to the model instead of dropped.
+  - Load failures are per-file, matching the tool loader: one bad skill never
+    blocks the rest.
+  - Webhooks deliberately do *not* gain a `skills` field — it would change the
+    canonical body that `X-Super-Agent-Signature` signs and break every
+    existing client.
+  - Ships two examples (`skills/html-page`, `skills/release-notes`). Measured
+    difference on a real task: with `release-notes` selected the model refused
+    to invent changes and returned a structure to fill in; without it, it
+    fabricated four generic bullet points.
+
+
 - **A model that only looked around was accepted as success.** Reported symptom:
   the task finished with the whole HTML page pasted into the chat and zero tool
   runs. Root cause: the "you did not write the file" correction only fired when
@@ -39,6 +76,104 @@
   Watchdog, Outbox, task matrix) moved unchanged to `/ops`. The old page at `/`
   was correct for an operator and useless for a person who just wanted a page
   built.
+- **Fixed: the card's ⋯ button overlapped the timestamp.** The button is
+  anchored top-right, which is exactly where the relative time ("40 分钟前")
+  wanted to sit, so the two collided and both became unreadable. The meta row
+  now reserves right padding for the button, and the button is smaller and
+  nudged up to align with the state pill. Touch devices get a visible button
+  (no hover to reveal it) via `@media (hover:none)`.
+- **Metrics split into "这一次" and "整个对话" instead of one unlabelled strip.**
+  Two sets of numbers sitting side by side with no labels was genuinely
+  confusing — the previous line read
+  `🔄 4 轮 · ↑ 19,996 入 · ⚡ 90% 缓存命中 · Σ 线程累计 29 轮 · ↑ 92,684`,
+  which invites "what is the difference?". They now render as two labelled
+  rows: the run that produced this answer, and the total across every attempt
+  on the thread (with the attempt count when there was more than one). Each
+  chip also carries a `title` explaining what it measures, e.g. the cache rate
+  says how many input tokens were served from the prompt cache and that only
+  the misses are billed at full price.
+- **Full Markdown rendering in task answers.** Fenced code with language tags,
+  GFM-style pipe tables with scroll wrappers, headings h1-h6, bullet and
+  numbered lists, blockquotes, horizontal rules, bold, italic, strikethrough,
+  and safe outbound links. All rendered natively without an external CDN, so the
+  console remains fully functional offline and from an installed wheel.
+- **Card action options: pin, archive, colour, and delete.**
+  - Every task card and output file tile now has a subtle `⋯` hover menu.
+  - `PATCH /api/tasks/{id}/flags` persists user presentation state (`pinned`,
+    `archived`, `color`) in a dedicated `task_flags` table, decoupled from the
+    task domain model. Pinned cards float to the top of the feed with a
+    `📌 置顶` badge; archived tasks are hidden by default and toggleable with
+    a new `📦 显示已归档` filter button; colours (7 palette options) render a
+    left accent border.
+  - `DELETE /api/files?path=...` allows true disk removal of unwanted artifacts.
+- **Feed folding & expand/collapse.**
+  - Long lists (e.g. 29 succeeded tasks) are capped at a default threshold
+    (`FOLD_LIMIT = 6`), collapsing older items into an interactive button
+    (`还有 N 个更早的结果 · 展开全部`).
+  - Clicking expands all items, toggling the button to `收起，只看最近的 6 个`.
+  - Pinned cards are immune to folding, staying anchored at the top.
+- **Fixed: retried tasks under-reported their real cost, sometimes as zero.**
+  `TaskResult.metrics` read only the newest Run. On a thread whose newest Run
+  was still live (or that had failed twice before succeeding), the result showed
+  `0 rounds / 0 tokens` for work that had actually spent 29 rounds and 92,684
+  prompt tokens. Metrics now report two numbers: the attempt that produced the
+  answer, and the sum across every attempt on the thread
+  (`thread_attempts`, `thread_model_rounds`, `thread_prompt_tokens`, …). The card
+  shows the thread total only when it differs, so an ordinary single-attempt
+  task stays quiet instead of printing the same figure twice.
+- **Prompt-cache impact of the refusal filter, measured.** Dropping a
+  self-defeating assistant turn from replayed history does change the prompt —
+  a controlled experiment shows the filtered prompt is byte-identical to one
+  that never had the refusal, so the only cost is a single cache miss on the
+  first continuation after such a turn. Every later turn hits normally. Worth
+  it: inheriting the excuse cost a whole failed turn, and re-sending context
+  already invalidates the cache each turn anyway (measured hit rate rises
+  58.8% → 74.5% → 89.2% across four turns).
+- **Execution telemetry on every result: tokens, rounds, cache hits.**
+  The runtime already received token usage from the provider and threw it away —
+  `ModelUsage` had no cache fields, nothing read `usage`, and `RunRecord` had
+  nowhere to store it. Now:
+  - `ModelUsage` carries `cached_tokens` / `cache_write_tokens` plus a
+    `cache_hit_rate`, and the OpenAI-compatible adapter parses
+    `prompt_tokens_details` (absent on many endpoints, so it degrades to zero).
+  - `RunMetrics` accumulates rounds, tokens, cache hits and tool calls during
+    execution, where the usage object actually exists, and `RunRecord` persists
+    them so a result can explain its own cost after the fact.
+  - `GET /api/tasks/{id}/result` exposes a `metrics` block; the card renders it
+    as a compact strip (`🔄 1 轮 · ↑ 1,159 入 · ↓ 51 出 · ⚡ 88% 缓存命中`).
+  - Measured on a real two-turn thread: the cold turn reported 0% cache, the
+    continued turn 88.35% (1024 of 1159 prompt tokens) — which is the concrete
+    reason continuing a thread is cheaper than starting a new task.
+- **Fixed: a give-up turn poisoned the thread it was continued from.**
+  `_durable_context` replays every prior context entry, including the assistant
+  turn where a model narrated its own limits ("我没有写文件的能力，请手动保存").
+  Continuing that thread fed the next turn a reason to refuse again. Assistant
+  turns matching a refusal pattern are now excluded from replayed history;
+  user messages and tool results are never filtered.
+- **Fixed: adding a column to a model broke every existing database.**
+  `create_schema` only created missing tables — it never altered an existing
+  one, so the new telemetry columns would have failed with "no such column" on
+  any upgraded checkout. Added an idempotent `_ensure_columns` that adds missing
+  columns with a conservative default; Alembic remains authoritative for
+  managed deployments.
+- **Dedicated Artifacts Shelf & Category Navigation.**
+  - Added `GET /api/artifacts` aggregating all workspace-created files with
+    direct preview URLs and originating task titles.
+  - Results are now categorized by state (`正在进行`, `已经做好`, `执行失败`,
+    `已取消`, `全部`) with dynamic badge counters, defaulting to `正在进行`
+    so users are not overwhelmed by dozens of historical cards on first load.
+  - Added a dedicated "产出文件" shelf below results with instant search/filter
+    and 1-click inline HTML modal preview.
+- **Deep Process Trace with Real Evidence.**
+  - Steps now feature two-layer inspection: clean headline and human summary for
+    everyone, plus expandable "底层参数与真实证据" showing raw user prompts, Fast
+    Path filtering decisions, tool invocation arguments (formatted JSON),
+    raw tool outputs, and Model Gateway request IDs.
+- **Context Continuation & Multi-Turn Conversations.**
+  - Every card now offers `💬 基于此任务继续`. Clicking activates continuation
+    mode with a visible thread banner; submitting a follow-up automatically
+    reuses the same persistent `thread_id`, resuming the same Worker sandbox and
+    memory context.
 - **The task page can tell you when a task finishes.** Browser notification,
   on by request. Two deliberate rules: permission is asked on the first submit
   (a real user gesture — asking on page load is hostile and browsers penalise

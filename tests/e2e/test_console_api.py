@@ -28,6 +28,10 @@ def _client(tmp_path, monkeypatch) -> TestClient:
         database_url=f"sqlite:///{tmp_path / 'console.db'}",
         model_name="test-model",
         router_batch_limit=6,
+        # Without its own workspace this test shares the repository root with
+        # every other test, and artifact writes from one can race another's
+        # assertions. tmp_path keeps each test hermetic.
+        workspace_root=str(tmp_path / "ws"),
     )
     return TestClient(create_app(settings))
 

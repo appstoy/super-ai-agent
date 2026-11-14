@@ -34,6 +34,7 @@ from super_agent.policies.speculative import SpeculativePolicy, SpeculativeReque
 from super_agent.ports.channel import ChannelDeliveryResult, ChannelType, DeliveryRequest
 from super_agent.ports.model import ModelGateway
 from super_agent.ports.tool import ToolEffect
+from super_agent.skills.loader import SkillRegistry
 from super_agent.tools.registry import ToolRegistry
 
 _TRIGGER_KEYWORDS = ("bug", "report", "会议", "报错", "复现", "修复", "故障", "回归")
@@ -70,6 +71,7 @@ class SpeculativeRunner:
         tools: ToolRegistry | None = None,
         spawn: Callable[[Callable[[], None]], None] | None = None,
         granted_capabilities: frozenset[str] | None = None,
+        skills: SkillRegistry | None = None,
     ) -> None:
         self._factory = factory
         self._gateway = gateway
@@ -89,6 +91,7 @@ class SpeculativeRunner:
                 derived.update(spec.capabilities)
             granted_capabilities = frozenset(derived)
         self._granted_capabilities = granted_capabilities
+        self._skills = skills
         self._lock = threading.Lock()
         self._entries: dict[UUID, SpeculationOutcome] = {}
 
@@ -209,6 +212,7 @@ class SpeculativeRunner:
                     self._gateway,
                     tools=self._tools,
                     granted_capabilities=self._granted_capabilities,
+                    skills=self._skills,
                 ).submit(trigger_input)
                 session.commit()
                 text = result.text

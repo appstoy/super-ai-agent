@@ -188,13 +188,8 @@ class OpenAICompatibleGateway(ModelGateway):
                         continue
                     if decoded.get("id") and provider_request_id is None:
                         provider_request_id = str(decoded["id"])
-                    raw_usage = decoded.get("usage")
-                    if isinstance(raw_usage, dict):
-                        usage = ModelUsage(
-                            int(raw_usage.get("prompt_tokens", 0) or 0),
-                            int(raw_usage.get("completion_tokens", 0) or 0),
-                            int(raw_usage.get("total_tokens", 0) or 0),
-                        )
+                    if decoded.get("usage") is not None:
+                        usage = OpenAICompatibleGateway._usage_from(decoded.get("usage"))
                     choices = decoded.get("choices", [])
                     if not isinstance(choices, list) or not choices:
                         continue
@@ -370,19 +365,38 @@ class OpenAICompatibleGateway(ModelGateway):
             message = {}
         text = OpenAICompatibleGateway._content_text(message.get("content"))
         tool_calls = OpenAICompatibleGateway._collect_tool_calls(payload, first, message, text)
-        usage = payload.get("usage", {})
-        if not isinstance(usage, dict):
-            usage = {}
         return ModelResponse(
             text=text,
             tool_calls=tuple(tool_calls),
-            usage=ModelUsage(
-                int(usage.get("prompt_tokens", 0) or 0),
-                int(usage.get("completion_tokens", 0) or 0),
-                int(usage.get("total_tokens", 0) or 0),
-            ),
+            usage=OpenAICompatibleGateway._usage_from(payload.get("usage")),
             provider_request_id=str(payload.get("id")) if payload.get("id") else None,
             finish_reason=str(first.get("finish_reason", "stop")),
+        )
+
+    @staticmethod
+    def _usage_from(raw_usage: object) -> ModelUsage:
+        """Parse token usage, including prompt-cache hits when reported.
+
+        OpenAI-compatible providers put cache accounting in
+        `prompt_tokens_details`. It is absent on many endpoints, so every field
+        falls back to zero rather than failing the response - a missing cache
+        report must not break a task that otherwise succeeded.
+        """
+
+        if not isinstance(raw_usage, dict):
+            return ModelUsage()
+        details = raw_usage.get("prompt_tokens_details")
+        cached = 0
+        cache_write = 0
+        if isinstance(details, dict):
+            cached = int(details.get("cached_tokens", 0) or 0)
+            cache_write = int(details.get("cache_write_tokens", 0) or 0)
+        return ModelUsage(
+            prompt_tokens=int(raw_usage.get("prompt_tokens", 0) or 0),
+            completion_tokens=int(raw_usage.get("completion_tokens", 0) or 0),
+            total_tokens=int(raw_usage.get("total_tokens", 0) or 0),
+            cached_tokens=cached,
+            cache_write_tokens=cache_write,
         )
 
     @staticmethod

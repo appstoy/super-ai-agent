@@ -28,6 +28,7 @@ from super_agent.domain.health import HealthStatus
 from super_agent.errors import AgentError
 from super_agent.ingress.schemas import TriggerInput
 from super_agent.ports.model import ChatMessage, MessageRole, ModelGateway, ModelRequest
+from super_agent.skills.loader import SkillRegistry
 from super_agent.storage.database import (
     create_engine_for_url,
     create_schema,
@@ -41,6 +42,18 @@ from super_agent.watchdog.rules import WatchdogFinding
 from super_agent.watchdog.session import WatchdogSession
 
 
+def _submit_payload(
+    message: str, model_name: str | None, skills: list[str] | None
+) -> dict[str, object]:
+    """Build a trigger payload carrying the skills the user asked for."""
+
+    payload: dict[str, object] = {"message": message, "model": model_name}
+    chosen = [name.strip() for name in (skills or []) if name and name.strip()]
+    if chosen:
+        payload["skills"] = chosen
+    return payload
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="super-agent", description="Super AI Agent control CLI")
     parser.add_argument("--version", action="version", version=__version__)
@@ -48,6 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("health", help="print local service health")
     subparsers.add_parser("tools", help="list loaded built-in and user tools")
+    subparsers.add_parser("skills", help="list installed skills (selectable playbooks)")
     subparsers.add_parser("model-check", help="call the configured OpenAI-compatible model")
     subparsers.add_parser("magpie-check", help="inspect a local Magpie gateway and model catalog")
     serve = subparsers.add_parser("serve", help="run the health API")
@@ -71,6 +85,12 @@ def build_parser() -> argparse.ArgumentParser:
     submit.add_argument("message")
     submit.add_argument("--model", default=None)
     submit.add_argument("--thread-id", default=None)
+    submit.add_argument(
+        "--skill",
+        action="append",
+        default=None,
+        help="name of a skill to apply to this task; repeatable",
+    )
     daemon = subparsers.add_parser("daemon", help="run the stateless BYOM endpoint daemon")
     daemon.add_argument("--server-url", default="http://127.0.0.1:8000")
     daemon.add_argument("--device-id", required=True)
@@ -106,6 +126,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "tools":
         _registry, _capabilities, report = build_agent_tools(settings)
         print(json.dumps(report.to_dict(), ensure_ascii=False, sort_keys=True))
+        return 0
+
+    if args.command == "skills":
+        _registry, _capabilities, report = build_agent_tools(settings)
+        catalogue = {
+            "enabled": settings.skills_enabled,
+            "skills": [skill.to_dict() for skill in report.skills.skills],
+            "failed": [list(item) for item in report.skills.failed],
+        }
+        print(json.dumps(catalogue, ensure_ascii=False, sort_keys=True))
         return 0
 
     if args.command == "model-check":
@@ -172,6 +202,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             create_schema(engine)
         factory = create_session_factory(engine)
         tools, agent_capabilities, _tool_report = build_agent_tools(settings)
+        skills = SkillRegistry(_tool_report.skills.skills)
         recall_tool = RecallTool(factory)
         tool_runner = DurableToolRunner(factory, tools)
 
@@ -199,6 +230,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             tool_runner=tool_runner,
             recall_tool=recall_tool,
             max_rounds=settings.worker_max_rounds,
+            skills=skills,
         )
         if args.once:
             print(json.dumps({"processed": worker.process_once()}))
@@ -307,7 +339,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         if settings.database_url.startswith("sqlite"):
             create_schema(engine)
         factory = create_session_factory(engine)
-        tools, agent_capabilities, _tool_report = build_agent_tools(settings)
+        tools, agent_capabilities, tool_report = build_agent_tools(settings)
+        skills = SkillRegistry(tool_report.skills.skills)
         recall_tool = RecallTool(factory)
         tool_runner = DurableToolRunner(factory, tools)
         if settings.model_base_url:
@@ -328,7 +361,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             source="cli",
             actor="cli-user",
             thread_id=thread_id,
-            payload={"message": args.message, "model": model_name},
+            payload=_submit_payload(args.message, model_name, args.skill),
             occurred_at=datetime.now(UTC),
             dedupe_key=f"cli:{thread_id}:{args.message}",
         )
@@ -342,6 +375,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     tool_runner=tool_runner,
                     recall_tool=recall_tool,
                     max_rounds=settings.worker_max_rounds,
+                    skills=skills,
                 ).submit_via_outbox(trigger)
         except AgentError as exc:
             raise SystemExit(str(exc)) from exc

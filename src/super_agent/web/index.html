@@ -9,6 +9,8 @@
   --bg:#fbfbfd; --panel:#fff; --ink:#1d1d1f; --ink2:#6e6e73; --ink3:#a1a1a6;
   --line:#e6e6ea; --line2:#f0f0f3;
   --accent:#0071e3; --accent-soft:#eaf3ff;
+  --c-red:#e5484d; --c-orange:#f76b15; --c-yellow:#f5d90a; --c-green:#30a46c;
+  --c-blue:#0090ff; --c-purple:#8e4ec6; --c-gray:#8b8b90;
   --ok:#1f9d55; --ok-soft:#eaf7ef;
   --err:#d70015; --err-soft:#fdecee;
   --wait:#95711c; --wait-soft:#fdf6e3;
@@ -122,6 +124,72 @@ button,input,select,textarea{font:inherit;color:inherit}
 .send.busy .spin{display:inline-block}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+.composer-wrap{position:relative}
+/* Slash menu: typing "/" in the composer opens the skill list in place, so
+   picking a skill does not require reaching for a separate row of chips. */
+.slash-menu{
+  position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:40;
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  box-shadow:0 12px 34px rgba(0,0,0,.14);padding:6px;max-height:290px;
+  overflow-y:auto;text-align:left;
+}
+@media (prefers-color-scheme: dark){
+  .slash-menu{box-shadow:0 14px 40px rgba(0,0,0,.6)}
+}
+.slash-menu[hidden]{display:none}
+.slash-item{
+  display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;
+  border:0;background:none;color:var(--ink);text-align:left;cursor:pointer;
+  padding:9px 11px;border-radius:9px;font-size:13.5px;line-height:1.35;
+}
+.slash-item .nm{font-weight:600;flex:none}
+.slash-item .ds{
+  color:var(--ink3);font-size:12px;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;flex:1;
+}
+.slash-item .on{font-size:11px;color:var(--accent);font-weight:600;flex:none}
+.slash-item.sel,.slash-item:hover{background:var(--accent-soft)}
+.slash-item.sel .nm{color:var(--accent)}
+.slash-empty{padding:12px 14px;color:var(--ink3);font-size:13px}
+.slash-foot{
+  padding:7px 12px 3px;color:var(--ink3);font-size:11.5px;
+  border-top:1px solid var(--line2);margin-top:5px;
+}
+.picked-row{
+  display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+  justify-content:center;margin-top:10px;
+}
+.picked-row[hidden]{display:none}
+.picked-row .lead{color:var(--ink3);font-size:12px}
+.picked-tag{
+  display:inline-flex;align-items:center;gap:5px;font-size:12px;
+  background:var(--accent-soft);color:var(--accent);border-radius:99px;
+  padding:4px 9px;font-weight:550;
+}
+.picked-tag button{
+  border:0;background:none;color:inherit;cursor:pointer;font-size:13px;
+  padding:0 0 0 1px;line-height:1;opacity:.75;
+}
+.picked-tag button:hover{opacity:1}
+
+.skills-bar{
+  display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+  justify-content:center;margin-top:16px;
+}
+.skills-bar .lead{color:var(--ink3);font-size:12.5px;margin-right:2px}
+.skill-chip{
+  border:1px solid var(--line);background:var(--panel);color:var(--ink2);
+  border-radius:99px;padding:6px 13px;font-size:12.5px;cursor:pointer;
+  transition:.15s;display:inline-flex;align-items:center;gap:6px;
+}
+.skill-chip:hover{border-color:var(--accent);color:var(--accent)}
+.skill-chip.on{
+  border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:500;
+}
+.skill-chip .tick{font-size:11px;opacity:0;transition:.15s}
+.skill-chip.on .tick{opacity:1}
+.skill-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
 .hints{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:18px}
 .hints button{
   border:1px solid var(--line);background:var(--panel);color:var(--ink2);
@@ -149,7 +217,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 }
 @keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
-.card .meta{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+.card .meta{display:flex;align-items:center;gap:9px;margin-bottom:9px;padding-right:30px}
 .state{
   font-size:11.5px;font-weight:600;letter-spacing:.01em;
   padding:3px 9px;border-radius:99px;flex:none;
@@ -258,6 +326,62 @@ button,input,select,textarea{font:inherit;color:inherit}
 .filter-btn:hover{border-color:var(--accent);color:var(--accent)}
 .filter-btn.on{background:var(--accent-soft);border-color:rgba(0,113,227,.35);color:var(--accent);font-weight:600}
 
+/* ---------- rendered markdown inside a result ---------- */
+.verdict .md-p{margin:0 0 8px}
+.verdict .md-p:last-child{margin-bottom:0}
+.verdict .md-h{margin:14px 0 8px;font-size:15px;font-weight:650;letter-spacing:-.01em;line-height:1.35}
+.verdict h1.md-h{font-size:19px}
+.verdict h2.md-h{font-size:17px}
+.verdict h3.md-h{font-size:15.5px}
+.verdict .md-list{margin:6px 0 10px;padding-left:20px}
+.verdict .md-list li{margin:3px 0;line-height:1.55}
+.verdict .md-hr{border:0;border-top:1px solid var(--line);margin:14px 0}
+.verdict .md-quote{
+  margin:8px 0;padding:6px 0 6px 12px;border-left:3px solid var(--line);
+  color:var(--ink2);font-size:14px;
+}
+.verdict .md-quote .md-p{margin:0}
+.verdict .md-code{
+  margin:10px 0;padding:12px 14px;background:var(--bg);
+  border:1px solid var(--line);border-radius:10px;overflow-x:auto;
+  font-family:var(--mono);font-size:12px;line-height:1.65;
+  white-space:pre;tab-size:2;
+}
+.verdict .md-code code{background:none;padding:0;font-size:inherit}
+.verdict .md-table-wrap{
+  margin:10px 0;overflow-x:auto;border:1px solid var(--line);border-radius:10px;
+}
+.verdict .md-table{border-collapse:collapse;width:100%;font-size:13px}
+.verdict .md-table th{
+  background:var(--line2);font-weight:600;text-align:left;
+  padding:7px 12px;border-bottom:1px solid var(--line);white-space:nowrap;
+}
+.verdict .md-table td{
+  padding:7px 12px;border-bottom:1px solid var(--line2);vertical-align:top;
+}
+.verdict .md-table tr:last-child td{border-bottom:0}
+.verdict a{color:var(--accent);text-decoration:none;border-bottom:1px solid rgba(0,113,227,.3)}
+.verdict a:hover{border-bottom-color:var(--accent)}
+.verdict del{color:var(--ink3)}
+
+/* execution telemetry: two labelled rows, so "this run" and "whole thread"
+   are never mistaken for each other */
+.metrics{
+  display:flex;flex-direction:column;gap:6px;
+  margin-top:12px;padding-top:10px;border-top:1px solid var(--line2);
+}
+.metric-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.metric-label{
+  font-size:10.5px;color:var(--ink3);flex:none;min-width:64px;
+  letter-spacing:.01em;
+}
+.metric{
+  font-family:var(--mono);font-size:10.5px;color:var(--ink2);
+  background:var(--line2);border-radius:6px;padding:2.5px 8px;white-space:nowrap;
+  cursor:help;
+}
+.metric-row:last-child .metric{opacity:.82}
+
 /* card action bar */
 .card-actions{
   display:flex;align-items:center;gap:8px;margin-top:14px;padding-top:12px;
@@ -359,6 +483,96 @@ button,input,select,textarea{font:inherit;color:inherit}
 }
 .shelf-tile-time{font-size:10.5px;color:var(--ink3);margin-top:auto}
 
+/* ---------- per-card / per-file action menu ---------- */
+.card{position:relative}
+.card-menu-btn{
+  position:absolute;top:16px;right:12px;width:24px;height:24px;border-radius:7px;
+  border:0;background:none;color:var(--ink3);cursor:pointer;font-size:15px;
+  line-height:1;display:grid;place-items:center;opacity:0;transition:.15s;
+}
+.card:hover .card-menu-btn,.card-menu-btn:focus-visible{opacity:1}
+@media (hover:none){
+  /* No hover on touch: an invisible control would be unreachable. */
+  .card-menu-btn,.tile-menu-btn{opacity:.55}
+}
+.card-menu-btn:hover{background:var(--line2);color:var(--ink)}
+
+.menu-pop{
+  position:absolute;z-index:40;min-width:158px;background:var(--panel);
+  border:1px solid var(--line);border-radius:12px;padding:5px;
+  box-shadow:0 10px 34px rgba(0,0,0,.16);
+  animation:in .12s ease both;
+}
+@media (prefers-color-scheme: dark){
+  .menu-pop{box-shadow:0 12px 34px rgba(0,0,0,.6)}
+}
+.menu-item{
+  display:flex;align-items:center;gap:9px;width:100%;border:0;background:none;
+  color:var(--ink);font-size:13px;text-align:left;padding:8px 10px;
+  border-radius:8px;cursor:pointer;white-space:nowrap;
+}
+.menu-item:hover{background:var(--line2)}
+.menu-item.danger{color:var(--err)}
+.menu-item.danger:hover{background:var(--err-soft)}
+.menu-sep{height:1px;background:var(--line2);margin:5px 4px}
+.menu-label{
+  font-size:10.5px;color:var(--ink3);padding:6px 10px 4px;
+  font-family:var(--mono);letter-spacing:.06em;
+}
+.swatches{display:flex;gap:6px;padding:2px 10px 8px}
+.swatch{
+  width:20px;height:20px;border-radius:50%;border:2px solid transparent;
+  cursor:pointer;transition:.15s;padding:0;
+}
+.swatch:hover{transform:scale(1.15)}
+.swatch.on{border-color:var(--ink)}
+.swatch.none{
+  background:var(--panel);border:1.5px dashed var(--ink3);
+  position:relative;
+}
+.swatch.none::after{
+  content:"×";position:absolute;inset:0;display:grid;place-items:center;
+  font-size:11px;color:var(--ink3);line-height:1;
+}
+
+/* pinned / archived / coloured states */
+.card.pinned{border-color:rgba(0,113,227,.35);box-shadow:0 1px 2px rgba(0,0,0,.03),0 0 0 1px rgba(0,113,227,.12)}
+.card.archived{opacity:.62}
+.card.archived:hover{opacity:1}
+.pin-badge{
+  font-size:10.5px;padding:2px 7px;border-radius:99px;
+  background:var(--accent-soft);color:var(--accent);font-weight:600;flex:none;
+}
+.skill-badge{
+  font-size:10.5px;padding:2px 8px;border-radius:99px;flex:none;
+  background:var(--ok-soft);color:var(--ok);font-weight:600;
+}
+.card[data-color="red"]{border-left:3px solid #e5484d}
+.card[data-color="orange"]{border-left:3px solid #f76b15}
+.card[data-color="yellow"]{border-left:3px solid #f5d90a}
+.card[data-color="green"]{border-left:3px solid #30a46c}
+.card[data-color="blue"]{border-left:3px solid #0090ff}
+.card[data-color="purple"]{border-left:3px solid #8e4ec6}
+.card[data-color="gray"]{border-left:3px solid var(--ink3)}
+
+/* shelf tile menu */
+.shelf-tile{position:relative}
+.tile-menu-btn{
+  position:absolute;top:6px;right:6px;width:20px;height:20px;border-radius:6px;
+  border:0;background:var(--panel);color:var(--ink3);cursor:pointer;font-size:13px;
+  line-height:1;display:grid;place-items:center;opacity:0;transition:.15s;
+}
+.shelf-tile:hover .tile-menu-btn,.tile-menu-btn:focus-visible{opacity:1}
+.tile-menu-btn:hover{background:var(--line2);color:var(--ink)}
+
+/* list folding */
+.fold-more{
+  display:block;width:100%;margin:4px 0 14px;padding:11px;border-radius:12px;
+  border:1px dashed var(--line);background:var(--panel);color:var(--ink2);
+  font-size:13px;cursor:pointer;transition:.15s;
+}
+.fold-more:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+
 /* ---------- viewer ---------- */
 .viewer{
   border:0;padding:0;width:min(1000px,92vw);height:min(760px,86vh);
@@ -422,10 +636,17 @@ button,input,select,textarea{font:inherit;color:inherit}
       <span class="txt" id="thread-msg">正在续接上下文…</span>
       <button class="cancel" id="thread-cancel" type="button">✕ 结束续接，发起新任务</button>
     </div>
-    <form class="composer" id="composer">
-      <textarea id="input" rows="1" placeholder="例如：做一个介绍 CSS Grid 的网页，存成 grid.html"></textarea>
-      <button class="send" id="send" type="submit"><span class="spin"></span>开始</button>
-    </form>
+    <div class="composer-wrap">
+      <form class="composer" id="composer">
+        <textarea id="input" rows="1" placeholder="例如：做一个介绍 CSS Grid 的网页，存成 grid.html（输入 / 选技能）"></textarea>
+        <button class="send" id="send" type="submit"><span class="spin"></span>开始</button>
+      </form>
+      <div class="slash-menu" id="slash-menu" hidden role="listbox" aria-label="技能列表"></div>
+    </div>
+    <div class="picked-row" id="picked-row" hidden></div>
+    <div class="skills-bar" id="skills-bar" hidden>
+      <span class="lead">用技能：</span>
+    </div>
     <div class="hints" id="hints"></div>
   </section>
 
@@ -437,6 +658,7 @@ button,input,select,textarea{font:inherit;color:inherit}
       <button class="ftab" data-cat="cancelled" type="button">已取消 <span class="cnt" id="c-cancelled">0</span></button>
       <button class="ftab" data-cat="all" type="button">全部 <span class="cnt" id="c-all">0</span></button>
       <div class="fspacer"></div>
+      <button class="filter-btn" id="f-archived" type="button">📦 显示已归档</button>
       <button class="filter-btn" id="f-artifacts" type="button">📄 只看有产物的卡片</button>
     </div>
     <div id="list"><div class="empty">当前没有正在跑的任务。点「已经做好」查看成果，或在上方发起新任务。</div></div>
@@ -484,6 +706,13 @@ const S = {
   continueTaskTitle: null,
   shelfArtifacts: [],
   shelfQuery: "",
+  showArchived: false,
+  skills: [],
+  pickedSkills: new Set(),
+  slashItems: [],
+  slashIndex: 0,
+  expanded: {},
+  foldKey: "default",
   seq: 0,
 };
 
@@ -504,9 +733,131 @@ function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
-function md(s) {
-  return esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
+/* ---------- Markdown renderer ----------
+   Models answer in Markdown constantly - tables, lists, headings, fenced code.
+   Showing that raw is the difference between a readable result and a wall of
+   asterisks. This is a deliberately small renderer: it covers what answers
+   actually use, escapes first so nothing can inject HTML, and leaves anything
+   it does not understand as plain text rather than mangling it.
+   No external CDN: the page must work offline and from a local install. */
+function mdInline(s) {
+  return esc(s)
+    .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+    .replace(/\*\*\*([^*]+)\*\*\*/g, "<strong><em>$1</em></strong>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+    .replace(/~~([^~]+)~~/g, "<del>$1</del>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener">$1</a>');
 }
+
+function md(s) {
+  const text = String(s ?? "").replace(/\r\n/g, "\n");
+  const lines = text.split("\n");
+  const out = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    const fence = line.match(/^\s*```(\w*)\s*$/);
+    if (fence) {
+      const lang = fence[1];
+      const body = [];
+      i++;
+      while (i < lines.length && !/^\s*```\s*$/.test(lines[i])) {
+        body.push(lines[i]);
+        i++;
+      }
+      i++;
+      out.push('<pre class="md-code"' + (lang ? ' data-lang="' + esc(lang) + '"' : "") +
+        "><code>" + esc(body.join("\n")) + "</code></pre>");
+      continue;
+    }
+
+    if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length &&
+        /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
+      const cells = (row) => row.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+      const head = cells(line);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
+        rows.push(cells(lines[i]));
+        i++;
+      }
+      out.push('<div class="md-table-wrap"><table class="md-table"><thead><tr>' +
+        head.map((c) => "<th>" + mdInline(c) + "</th>").join("") +
+        "</tr></thead><tbody>" +
+        rows.map((r) => "<tr>" + r.map((c) => "<td>" + mdInline(c) + "</td>").join("") + "</tr>").join("") +
+        "</tbody></table></div>");
+      continue;
+    }
+
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) {
+      const level = h[1].length;
+      out.push("<h" + level + ' class="md-h">' + mdInline(h[2]) + "</h" + level + ">");
+      i++;
+      continue;
+    }
+
+    if (/^\s*([-*_])\1{2,}\s*$/.test(line)) {
+      out.push('<hr class="md-hr">');
+      i++;
+      continue;
+    }
+
+    if (/^\s*>\s?/.test(line)) {
+      const body = [];
+      while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
+        body.push(lines[i].replace(/^\s*>\s?/, ""));
+        i++;
+      }
+      out.push('<blockquote class="md-quote">' + md(body.join("\n")) + "</blockquote>");
+      continue;
+    }
+
+    if (/^\s*[-*+]\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
+        items.push(lines[i].replace(/^\s*[-*+]\s+/, ""));
+        i++;
+      }
+      out.push('<ul class="md-list">' + items.map((x) => "<li>" + mdInline(x) + "</li>").join("") + "</ul>");
+      continue;
+    }
+
+    if (/^\s*\d+[.)]\s+/.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) {
+        items.push(lines[i].replace(/^\s*\d+[.)]\s+/, ""));
+        i++;
+      }
+      out.push('<ol class="md-list">' + items.map((x) => "<li>" + mdInline(x) + "</li>").join("") + "</ol>");
+      continue;
+    }
+
+    if (!line.trim()) {
+      i++;
+      continue;
+    }
+
+    const para = [];
+    while (i < lines.length && lines[i].trim() &&
+           !/^\s*(```|#{1,6}\s|[-*+]\s|\d+[.)]\s|>)/.test(lines[i]) &&
+           !/^\s*\|.*\|\s*$/.test(lines[i])) {
+      para.push(lines[i]);
+      i++;
+    }
+    if (para.length) {
+      out.push('<p class="md-p">' + mdInline(para.join(" ")) + "</p>");
+    } else {
+      i++;
+    }
+  }
+  return out.join("");
+}
+
 function bytes(n) {
   if (n == null) return "";
   if (n < 1024) return n + " B";
@@ -632,6 +983,180 @@ function revealResult(taskId) {
 }
 
 /* ---------- render ---------- */
+/* ---------- per-card action menu ---------- */
+const COLORS = [
+  ["", "无"],
+  ["red", "红"],
+  ["orange", "橙"],
+  ["yellow", "黄"],
+  ["green", "绿"],
+  ["blue", "蓝"],
+  ["purple", "紫"],
+  ["gray", "灰"],
+];
+
+let openMenu = null;
+
+function closeMenu() {
+  if (openMenu) {
+    openMenu.remove();
+    openMenu = null;
+  }
+}
+document.addEventListener("click", (e) => {
+  if (openMenu && !openMenu.contains(e.target) &&
+      !e.target.closest(".card-menu-btn") && !e.target.closest(".tile-menu-btn")) {
+    closeMenu();
+  }
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
+
+function positionMenu(menu, anchorEl) {
+  const rect = anchorEl.getBoundingClientRect();
+  menu.style.position = "fixed";
+  menu.style.top = Math.min(rect.bottom + 6, window.innerHeight - menu.offsetHeight - 12) + "px";
+  menu.style.left = Math.max(8, Math.min(rect.right - 158, window.innerWidth - 170)) + "px";
+}
+
+async function patchFlags(taskId, patch) {
+  try {
+    const updated = await api("/api/tasks/" + taskId + "/flags", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    const cur = S.items.get(taskId);
+    if (cur) {
+      cur.pinned = updated.pinned;
+      cur.archived = updated.archived;
+      cur.color = updated.color;
+    }
+    render();
+    return true;
+  } catch (e) {
+    toast("没保存成功：" + e.message);
+    return false;
+  }
+}
+
+function buildCardMenu(r) {
+  const menu = document.createElement("div");
+  menu.className = "menu-pop";
+
+  const pin = document.createElement("button");
+  pin.className = "menu-item";
+  pin.innerHTML = "<span>" + (r.pinned ? "📌" : "📍") + "</span><span>" +
+    (r.pinned ? "取消置顶" : "置顶") + "</span>";
+  pin.onclick = async (e) => {
+    e.stopPropagation();
+    closeMenu();
+    await patchFlags(r.task_id, { pinned: !r.pinned });
+  };
+  menu.appendChild(pin);
+
+  const archive = document.createElement("button");
+  archive.className = "menu-item";
+  archive.innerHTML = "<span>" + (r.archived ? "📤" : "📥") + "</span><span>" +
+    (r.archived ? "取消归档" : "归档") + "</span>";
+  archive.onclick = async (e) => {
+    e.stopPropagation();
+    closeMenu();
+    await patchFlags(r.task_id, { archived: !r.archived });
+  };
+  menu.appendChild(archive);
+
+  const sep = document.createElement("div");
+  sep.className = "menu-sep";
+  menu.appendChild(sep);
+
+  const label = document.createElement("div");
+  label.className = "menu-label";
+  label.textContent = "标记颜色";
+  menu.appendChild(label);
+
+  const sw = document.createElement("div");
+  sw.className = "swatches";
+  for (const [value, name] of COLORS) {
+    const b = document.createElement("button");
+    b.className = "swatch" + (value === "" ? " none" : "") +
+      ((r.color || "") === value ? " on" : "");
+    if (value) b.style.background = "var(--c-" + value + ")";
+    b.title = name;
+    b.onclick = async (e) => {
+      e.stopPropagation();
+      closeMenu();
+      await patchFlags(r.task_id, { color: value });
+    };
+    sw.appendChild(b);
+  }
+  menu.appendChild(sw);
+
+  const sep2 = document.createElement("div");
+  sep2.className = "menu-sep";
+  menu.appendChild(sep2);
+
+  const del = document.createElement("button");
+  del.className = "menu-item danger";
+  del.innerHTML = "<span>🗑️</span><span>删除任务</span>";
+  del.onclick = async (e) => {
+    e.stopPropagation();
+    closeMenu();
+    if (!confirm("删除这个任务？任务记录会一并移除，产出的文件保留在磁盘上。")) return;
+    try {
+      await api("/api/tasks/" + r.task_id, { method: "DELETE" });
+      S.items.delete(r.task_id);
+      render();
+      toast("已删除");
+    } catch (err) {
+      toast("删除失败：" + err.message);
+    }
+  };
+  menu.appendChild(del);
+
+  return menu;
+}
+
+/* ---------- per-file action menu ---------- */
+function buildFileMenu(artifact, onDone) {
+  const menu = document.createElement("div");
+  menu.className = "menu-pop";
+
+  const open = document.createElement("button");
+  open.className = "menu-item";
+  open.innerHTML = "<span>👁️</span><span>预览</span>";
+  open.onclick = (e) => {
+    e.stopPropagation();
+    closeMenu();
+    openFile(artifact.path);
+  };
+  menu.appendChild(open);
+
+  const sep = document.createElement("div");
+  sep.className = "menu-sep";
+  menu.appendChild(sep);
+
+  const del = document.createElement("button");
+  del.className = "menu-item danger";
+  del.innerHTML = "<span>🗑️</span><span>删除文件</span>";
+  del.onclick = async (e) => {
+    e.stopPropagation();
+    closeMenu();
+    if (!confirm("删除文件 " + artifact.name + "？磁盘上的文件会被真正移除。")) return;
+    try {
+      await api("/api/files?path=" + encodeURIComponent(artifact.path), { method: "DELETE" });
+      toast("已删除 " + artifact.name);
+      if (onDone) onDone();
+      loadArtifactsShelf();
+      loadFeed();
+    } catch (err) {
+      toast("删除失败：" + err.message);
+    }
+  };
+  menu.appendChild(del);
+
+  return menu;
+}
+
 /* ---------- Context Continuation Mode ---------- */
 function startContinuation(threadId, title) {
   if (!threadId) { toast("该任务缺少上下文线索，无法续接"); return; }
@@ -658,8 +1183,15 @@ function cardHtml(r) {
   const live = ["pending", "running", "waiting", "cancel_requested"].includes(r.status);
   const parts = [];
 
+  parts.push('<button class="card-menu-btn" data-menu="' + esc(r.task_id) + '" type="button" title="更多操作">⋯</button>');
   parts.push('<div class="meta">');
   parts.push('<span class="state ' + tone + '">' + esc((r.state && r.state.text) || text) + '</span>');
+  if (r.pinned) parts.push('<span class="pin-badge">📌 置顶</span>');
+  if (r.skills && r.skills.length) {
+    parts.push('<span class="skill-badge" title="本次任务套用的技能">✦ ' +
+      esc(r.skills.join("、")) + '</span>');
+  }
+  if (r.archived) parts.push('<span class="pin-badge" style="background:var(--line2);color:var(--ink2)">已归档</span>');
   if (live) parts.push('<span class="state active">进行中</span>');
   if (r.duration_seconds != null) parts.push('<span class="duration">用了 ' + r.duration_seconds + ' 秒</span>');
   parts.push('<span class="when">' + esc(when(r.finished_at || r.started_at)) + '</span>');
@@ -715,6 +1247,88 @@ function cardHtml(r) {
     parts.push('</ul></details>');
   }
 
+  // Execution telemetry, in two clearly separated groups.
+  // "This run" answers "what did the answer I'm reading cost?". "Whole thread"
+  // answers "what has this conversation cost in total?" - different questions,
+  // and a user could not tell them apart when they were one undifferentiated
+  // strip of numbers.
+  const m = r.metrics || {};
+  const runBits = [];
+  if (m.model_rounds) {
+    runBits.push(['🔄 ' + m.model_rounds + ' 轮', '这次任务向大模型发起了几轮请求（工具调用会多轮）']);
+  }
+  if (m.tool_calls) {
+    runBits.push(['🔧 ' + m.tool_calls + ' 次工具', '这次任务里模型实际调用了几次工具（读/写文件等）']);
+  }
+  if (m.prompt_tokens) {
+    runBits.push(['↑ ' + m.prompt_tokens.toLocaleString() + ' 入', '这次任务发给大模型的 token 数（含历史上下文）']);
+  }
+  if (m.completion_tokens) {
+    runBits.push(['↓ ' + m.completion_tokens.toLocaleString() + ' 出', '这次任务大模型生成的 token 数']);
+  }
+  if (m.cached_tokens) {
+    runBits.push([
+      '⚡ ' + Math.round((m.cache_hit_rate || 0) * 100) + '% 命中缓存',
+      '这次输入里有 ' + m.cached_tokens.toLocaleString() +
+      ' 个 token 命中了大模型的提示缓存，只有没命中的部分才按原价计费',
+    ]);
+  }
+
+  const attempts = m.thread_attempts || 0;
+  const threadDiffers =
+    (m.thread_model_rounds || 0) > (m.model_rounds || 0) ||
+    (m.thread_prompt_tokens || 0) > (m.prompt_tokens || 0);
+
+  if (runBits.length || threadDiffers) {
+    parts.push('<div class="metrics">');
+
+    if (runBits.length) {
+      parts.push('<div class="metric-row">');
+      parts.push('<span class="metric-label">这一次</span>');
+      for (const [label, tip] of runBits) {
+        parts.push('<span class="metric" title="' + esc(tip) + '">' + esc(label) + '</span>');
+      }
+      parts.push('</div>');
+    }
+
+    if (threadDiffers) {
+      const threadBits = [];
+      if (m.thread_model_rounds) {
+        threadBits.push([
+          '🔄 ' + m.thread_model_rounds + ' 轮',
+          '这个对话线程从头到现在累计的模型请求轮数（含失败重试）',
+        ]);
+      }
+      if (m.thread_tool_calls) {
+        threadBits.push([
+          '🔧 ' + m.thread_tool_calls + ' 次工具',
+          '这个线程累计调用工具的次数',
+        ]);
+      }
+      if (m.thread_prompt_tokens) {
+        threadBits.push([
+          '↑ ' + m.thread_prompt_tokens.toLocaleString() + ' 入',
+          '这个线程累计消耗的输入 token（每轮都会重发历史上下文，所以比单次多）',
+        ]);
+      }
+      if (m.thread_cached_tokens) {
+        threadBits.push([
+          '⚡ ' + Math.round((m.thread_cache_hit_rate || 0) * 100) + '% 命中缓存',
+          '这个线程累计的缓存命中率，越高说明重复内容越多、越省钱',
+        ]);
+      }
+      parts.push('<div class="metric-row">');
+      parts.push('<span class="metric-label">整个对话' +
+        (attempts > 1 ? '（' + attempts + ' 次尝试）' : '') + '</span>');
+      for (const [label, tip] of threadBits) {
+        parts.push('<span class="metric" title="' + esc(tip) + '">' + esc(label) + '</span>');
+      }
+      parts.push('</div>');
+    }
+
+    parts.push('</div>');
+  }
+
   // Card action bar
   parts.push('<div class="card-actions">');
   if (r.thread_id) {
@@ -725,7 +1339,10 @@ function cardHtml(r) {
   }
   parts.push('</div>');
 
-  return '<article class="card" id="r-' + esc(r.task_id) + '" data-id="' + esc(r.task_id) + '">' + parts.join("") + '</article>';
+  const cls = "card" + (r.pinned ? " pinned" : "") + (r.archived ? " archived" : "");
+  const colorAttr = r.color ? ' data-color="' + esc(r.color) + '"' : "";
+  return '<article class="' + cls + '" id="r-' + esc(r.task_id) + '" data-id="' + esc(r.task_id) + '"' +
+    colorAttr + '>' + parts.join("") + '</article>';
 }
 
 function updateCategoryCounts(all) {
@@ -743,9 +1360,13 @@ function updateCategoryCounts(all) {
   $("c-cancelled").textContent = counts.cancelled;
 }
 
+const FOLD_LIMIT = 6;
+
 function render() {
   const list = $("list");
   const all = [...S.items.values()].sort((a, b) => {
+    // Pinned cards always float to the top, regardless of recency.
+    if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
     const av = String(a.finished_at || a.started_at || "");
     const bv = String(b.finished_at || b.started_at || "");
     if (av && bv && av !== bv) return av < bv ? 1 : -1;
@@ -755,6 +1376,8 @@ function render() {
   updateCategoryCounts(all);
 
   let filtered = all.filter((r) => {
+    // Archived work is hidden unless the user explicitly asks to see it.
+    if (r.archived && !S.showArchived) return false;
     if (S.category === "running") return ["pending", "running", "waiting", "cancel_requested"].includes(r.status);
     if (S.category === "succeeded") return r.status === "succeeded";
     if (S.category === "failed") return ["failed", "timed_out"].includes(r.status);
@@ -776,7 +1399,28 @@ function render() {
     return;
   }
 
-  list.innerHTML = filtered.map(cardHtml).join("");
+  // Folding: a long history must not become an endless scroll. Pinned cards are
+  // never folded away - the whole point of pinning is that it stays in sight.
+  const expanded = S.expanded[S.foldKey] === true;
+  const pinnedItems = filtered.filter((r) => r.pinned);
+  const rest = filtered.filter((r) => !r.pinned);
+  let shown = filtered;
+  let hidden = 0;
+
+  if (!expanded && rest.length > FOLD_LIMIT) {
+    shown = pinnedItems.concat(rest.slice(0, FOLD_LIMIT));
+    hidden = rest.length - FOLD_LIMIT;
+  }
+
+  let html = shown.map(cardHtml).join("");
+  if (hidden > 0) {
+    html += '<button class="fold-more" id="fold-more" type="button">还有 ' + hidden +
+      ' 个更早的结果 · 展开全部</button>';
+  } else if (expanded && rest.length > FOLD_LIMIT) {
+    html += '<button class="fold-more" id="fold-less" type="button">收起，只看最近的 ' +
+      FOLD_LIMIT + ' 个</button>';
+  }
+  list.innerHTML = html;
 
   list.querySelectorAll("[data-file]").forEach((b) => {
     b.onclick = () => openFile(b.dataset.file);
@@ -785,6 +1429,27 @@ function render() {
   list.querySelectorAll("[data-continue]").forEach((b) => {
     b.onclick = () => startContinuation(b.dataset.continue, b.dataset.title);
   });
+
+  list.querySelectorAll("[data-menu]").forEach((b) => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      const already = openMenu && openMenu.dataset.for === b.dataset.menu;
+      closeMenu();
+      if (already) return;
+      const r = S.items.get(b.dataset.menu);
+      if (!r) return;
+      const menu = buildCardMenu(r);
+      menu.dataset.for = b.dataset.menu;
+      document.body.appendChild(menu);
+      positionMenu(menu, b);
+      openMenu = menu;
+    };
+  });
+
+  const more = $("fold-more");
+  if (more) more.onclick = () => { S.expanded[S.foldKey] = true; render(); };
+  const less = $("fold-less");
+  if (less) less.onclick = () => { S.expanded[S.foldKey] = false; render(); };
 }
 
 /* ---------- viewer ---------- */
@@ -879,6 +1544,9 @@ async function submit(text) {
   if (S.continueThreadId) {
     payload.thread_id = S.continueThreadId;
   }
+  if (S.pickedSkills.size) {
+    payload.skills = [...S.pickedSkills];
+  }
 
   const placeholder = {
     task_id: "pending-" + Date.now(),
@@ -891,8 +1559,13 @@ async function submit(text) {
     artifacts: [],
     steps: [
       { text: "收到任务", kind: "info", summary: S.continueThreadId ? "续接已有对话线程" : "开启新任务" }
-    ],
+    ].concat(S.pickedSkills.size ? [{
+      text: "套用技能",
+      kind: "info",
+      summary: [...S.pickedSkills].join("、"),
+    }] : []),
     finished_at: new Date().toISOString(),
+    skills: S.pickedSkills.size ? [...S.pickedSkills] : [],
   };
   upsert(placeholder);
 
@@ -990,8 +1663,37 @@ function autoGrow() {
   el.style.height = Math.min(el.scrollHeight, 190) + "px";
 }
 
-$("input").addEventListener("input", autoGrow);
+$("input").addEventListener("input", () => { autoGrow(); renderSlash(); });
+// The caret can move without the value changing (arrow keys, click), and the
+// menu follows the caret, so those need the same refresh.
+$("input").addEventListener("click", renderSlash);
+$("input").addEventListener("keyup", (e) => {
+  if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) renderSlash();
+});
+$("input").addEventListener("blur", () => setTimeout(closeSlash, 120));
 $("input").addEventListener("keydown", (e) => {
+  const menuOpen = !$("slash-menu").hidden && S.slashItems.length > 0;
+  if (menuOpen) {
+    // The menu owns the arrow/enter/escape keys while it is open, otherwise
+    // Enter would submit a half-typed "/rel" instead of picking the skill.
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const delta = e.key === "ArrowDown" ? 1 : -1;
+      S.slashIndex = (S.slashIndex + delta + S.slashItems.length) % S.slashItems.length;
+      renderSlash();
+      return;
+    }
+    if (e.key === "Enter" && !e.isComposing) {
+      e.preventDefault();
+      applySlash(S.slashItems[S.slashIndex].name);
+      return;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closeSlash();
+      return;
+    }
+  }
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
     submit($("input").value);
@@ -1036,6 +1738,7 @@ function renderShelf() {
     const isHtml = /\.(html?|htm|svg)$/i.test(a.name);
     const ic = isHtml ? "🌐" : /\.(md|txt)$/i.test(a.name) ? "📝" : /\.(py|js|css|json)$/i.test(a.name) ? "⚙️" : "📄";
     return '<div class="shelf-tile" data-file="' + esc(a.path) + '">' +
+      '<button class="tile-menu-btn" data-tile-menu="' + esc(a.path) + '" type="button" title="更多操作">⋯</button>' +
       '<div class="shelf-tile-top">' +
         '<span class="shelf-tile-ic">' + ic + '</span>' +
         '<span class="shelf-tile-name" title="' + esc(a.name) + '">' + esc(a.name) + '</span>' +
@@ -1047,7 +1750,27 @@ function renderShelf() {
   }).join("");
 
   g.querySelectorAll(".shelf-tile").forEach((tile) => {
-    tile.onclick = () => openFile(tile.dataset.file);
+    tile.onclick = (e) => {
+      if (e.target.closest("[data-tile-menu]")) return;
+      openFile(tile.dataset.file);
+    };
+  });
+
+  g.querySelectorAll("[data-tile-menu]").forEach((btn) => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const key = btn.dataset.tileMenu;
+      const already = openMenu && openMenu.dataset.for === key;
+      closeMenu();
+      if (already) return;
+      const artifact = S.shelfArtifacts.find((x) => x.path === key);
+      if (!artifact) return;
+      const menu = buildFileMenu(artifact);
+      menu.dataset.for = key;
+      document.body.appendChild(menu);
+      positionMenu(menu, btn);
+      openMenu = menu;
+    };
   });
 }
 
@@ -1074,6 +1797,163 @@ $("f-artifacts").onclick = () => {
   render();
 };
 
+const archivedBtn = $("f-archived");
+if (archivedBtn) {
+  archivedBtn.onclick = () => {
+    S.showArchived = !S.showArchived;
+    archivedBtn.classList.toggle("on", S.showArchived);
+    render();
+  };
+}
+
+/* ---------- skills ---------- */
+// Two ways to pick a skill, because they serve different moments:
+//   /  in the composer  -> the list appears right under the cursor
+//   the chips below     -> one click, no typing
+// Both write to the same S.pickedSkills set, so they can never disagree.
+function skillTip(s) {
+  return s.description + (s.when_to_use ? "\n适用：" + s.when_to_use : "");
+}
+
+function renderPicked() {
+  const row = $("picked-row");
+  if (!row) return;
+  if (!S.pickedSkills.size) { row.hidden = true; row.innerHTML = ""; return; }
+  row.hidden = false;
+  row.innerHTML = '<span class="lead">本次套用：</span>' +
+    [...S.pickedSkills].map((name) => {
+      const s = S.skills.find((x) => x.name === name);
+      const label = s ? (s.title || s.name) : name;
+      return '<span class="picked-tag">✦ ' + esc(label) +
+        '<button type="button" data-unpick="' + esc(name) +
+        '" title="移除这个技能" aria-label="移除">×</button></span>';
+    }).join("");
+  row.querySelectorAll("[data-unpick]").forEach((btn) => {
+    btn.onclick = () => { S.pickedSkills.delete(btn.dataset.unpick); renderSkills(); };
+  });
+}
+
+function renderSkills() {
+  const bar = $("skills-bar");
+  renderPicked();
+  if (!S.skills.length) { bar.hidden = true; return; }
+  bar.hidden = false;
+  bar.innerHTML = '<span class="lead">用技能：</span>' + S.skills.map((s) => {
+    const on = S.pickedSkills.has(s.name);
+    return '<button type="button" class="skill-chip' + (on ? " on" : "") + '"' +
+      ' data-skill="' + esc(s.name) + '" title="' + esc(skillTip(s)) +
+      '" aria-pressed="' + on + '">' +
+      '<span class="tick">✓</span>' + esc(s.title || s.name) + "</button>";
+  }).join("") +
+    (S.pickedSkills.size
+      ? '<button type="button" class="skill-chip" data-skill-clear="1" title="取消全部技能">✕ 清除</button>'
+      : "");
+  bar.querySelectorAll("[data-skill]").forEach((btn) => {
+    btn.onclick = () => toggleSkill(btn.dataset.skill);
+  });
+  const clear = bar.querySelector("[data-skill-clear]");
+  if (clear) clear.onclick = () => { S.pickedSkills.clear(); renderSkills(); };
+}
+
+function toggleSkill(name) {
+  if (S.pickedSkills.has(name)) S.pickedSkills.delete(name);
+  else S.pickedSkills.add(name);
+  renderSkills();
+}
+
+/* ---------- slash menu ---------- */
+function slashQuery() {
+  const el = $("input");
+  // Only the token the caret sits in counts: a slash mid-sentence is prose,
+  // not a command. Requiring the token to start the value keeps it predictable.
+  const before = el.value.slice(0, el.selectionStart);
+  const m = before.match(/(?:^|\s)\/([^\s\/]*)$/);
+  return m ? m[1] : null;
+}
+
+function slashMatches(query) {
+  const q = (query || "").toLowerCase();
+  return S.skills.filter((s) => {
+    if (!q) return true;
+    const hay = (s.name + " " + (s.title || "") + " " + s.description + " " +
+      (s.tags || []).join(" ")).toLowerCase();
+    return hay.includes(q);
+  });
+}
+
+function renderSlash() {
+  const menu = $("slash-menu");
+  const query = slashQuery();
+  if (query === null) { closeSlash(); return; }
+  if (!S.skills.length) {
+    menu.hidden = false;
+    menu.innerHTML = '<div class="slash-empty">还没有安装技能。在项目里建一个 ' +
+      '<code>skills/名字/SKILL.md</code> 就会出现。</div>';
+    return;
+  }
+  const items = slashMatches(query);
+  S.slashItems = items;
+  if (S.slashIndex >= items.length) S.slashIndex = 0;
+  menu.hidden = false;
+  if (!items.length) {
+    menu.innerHTML = '<div class="slash-empty">没有匹配「' + esc(query) + '」的技能</div>';
+    return;
+  }
+  menu.innerHTML = items.map((s, i) => {
+    const on = S.pickedSkills.has(s.name);
+    return '<button type="button" class="slash-item' +
+      (i === S.slashIndex ? " sel" : "") + '" role="option"' +
+      ' aria-selected="' + (i === S.slashIndex) + '" data-slash="' + esc(s.name) + '">' +
+      '<span class="nm">/' + esc(s.name) + "</span>" +
+      '<span class="ds">' + esc(s.description) + "</span>" +
+      (on ? '<span class="on">已选</span>' : "") + "</button>";
+  }).join("") +
+    '<div class="slash-foot">↑↓ 选择 · Enter 确认 · Esc 关闭</div>';
+  menu.querySelectorAll("[data-slash]").forEach((btn) => {
+    btn.onmousedown = (e) => {
+      // mousedown, not click: the textarea blurs first and would close the menu.
+      e.preventDefault();
+      applySlash(btn.dataset.slash);
+    };
+  });
+}
+
+function closeSlash() {
+  const menu = $("slash-menu");
+  if (menu) menu.hidden = true;
+  S.slashItems = [];
+  S.slashIndex = 0;
+}
+
+function applySlash(name) {
+  const el = $("input");
+  // Strip the /token that opened the menu, keep everything else the user typed.
+  const before = el.value.slice(0, el.selectionStart);
+  const after = el.value.slice(el.selectionStart);
+  const stripped = before.replace(/(^|\s)\/([^\s\/]*)$/, "$1");
+  el.value = (stripped + after).replace(/^\s+/, "");
+  el.selectionStart = el.selectionEnd = el.value.length;
+  toggleSkill(name);
+  closeSlash();
+  autoGrow();
+  el.focus();
+}
+
+async function loadSkills() {
+  try {
+    const d = await api("/api/skills");
+    S.skills = d.skills || [];
+    // A skill that vanished from disk must not stay selected invisibly.
+    const live = new Set(S.skills.map((s) => s.name));
+    for (const name of [...S.pickedSkills]) if (!live.has(name)) S.pickedSkills.delete(name);
+    renderSkills();
+    renderSlash();
+  } catch {
+    S.skills = [];
+    renderSkills();
+  }
+}
+
 $("hints").innerHTML = EXAMPLES.map((x) => '<button type="button">' + esc(x) + "</button>").join("");
 $("hints").querySelectorAll("button").forEach((b) => {
   b.onclick = () => { $("input").value = b.textContent; autoGrow(); $("input").focus(); };
@@ -1090,6 +1970,7 @@ $("hints").querySelectorAll("button").forEach((b) => {
     $("model").innerHTML = '<option value="">默认模型</option>';
   }
   paintNotifyButton();
+  loadSkills();
   await loadFeed();
   loadArtifactsShelf();
   $("input").focus();
