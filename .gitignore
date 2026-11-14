@@ -1,0 +1,23 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+.env
+.env.*
+!.env.example
+*.db
+# SQLite write-ahead/rollback sidecars: they are runtime state, not source.
+*.db-shm
+*.db-wal
+
+.alma-snapshots
+
+# Per-task artifact folders created at runtime by the Worker.
+# Each task writes into its own subfolder here, so this grows with use
+# and must never be committed.
+项目缓存文件/

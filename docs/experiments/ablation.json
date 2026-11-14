@@ -1,0 +1,54 @@
+{
+  "experiment": "article-7.1-ablation",
+  "events_per_run": 300,
+  "work_requests_per_run": 20,
+  "runs": 5,
+  "seed": 7,
+  "work_seconds": 0.05,
+  "variants": [
+    {
+      "variant": "super-agent",
+      "runs": 5,
+      "p50_minutes": 0.0013986469991505146,
+      "p95_minutes": 0.0016094760022436578,
+      "router_calls_mean": 245.6,
+      "worker_calls_mean": 600.0,
+      "prompt_chars_mean": 1480463.2,
+      "completed_work": 20,
+      "interrupted_work": 0
+    },
+    {
+      "variant": "super-agent-no-direct",
+      "runs": 5,
+      "p50_minutes": 0.0015867133329932888,
+      "p95_minutes": 0.0019491153319055835,
+      "router_calls_mean": 300.0,
+      "worker_calls_mean": 600.0,
+      "prompt_chars_mean": 1782050.4,
+      "completed_work": 20,
+      "interrupted_work": 0
+    },
+    {
+      "variant": "single-session-neutral",
+      "runs": 5,
+      "p50_minutes": 0.008833333333333337,
+      "p95_minutes": 0.015233333333333342,
+      "router_calls_mean": 0.0,
+      "worker_calls_mean": 20.0,
+      "prompt_chars_mean": 82207.2,
+      "completed_work": 20,
+      "interrupted_work": 0
+    },
+    {
+      "variant": "single-session-delegate",
+      "runs": 5,
+      "p50_minutes": 0.001953333333333334,
+      "p95_minutes": 0.003393333333333336,
+      "router_calls_mean": 0.0,
+      "worker_calls_mean": 20.0,
+      "prompt_chars_mean": 82207.2,
+      "completed_work": 20,
+      "interrupted_work": 0
+    }
+  ]
+}

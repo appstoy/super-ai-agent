@@ -1,0 +1,49 @@
+{
+  "experiment": "article-7.2-router-batching",
+  "model": "latency-simulated (sub-linear prefill), Workers mocked",
+  "base_latency_seconds": 2.5,
+  "prefill_exponent": 0.35,
+  "duration_seconds_per_rate": 25.0,
+  "rates": [
+    {
+      "rate_per_minute": 1.0,
+      "triggers": 1,
+      "router_calls": 1,
+      "avg_batch_size": 1.0,
+      "max_batch_size": 1,
+      "avg_request_seconds": 2.5,
+      "seconds_per_decision": 2.5,
+      "wall_seconds": 25.004658499732614
+    },
+    {
+      "rate_per_minute": 10.0,
+      "triggers": 5,
+      "router_calls": 5,
+      "avg_batch_size": 1.0,
+      "max_batch_size": 1,
+      "avg_request_seconds": 2.5,
+      "seconds_per_decision": 2.5,
+      "wall_seconds": 26.16414330014959
+    },
+    {
+      "rate_per_minute": 20.0,
+      "triggers": 9,
+      "router_calls": 9,
+      "avg_batch_size": 1.0,
+      "max_batch_size": 1,
+      "avg_request_seconds": 2.5,
+      "seconds_per_decision": 2.5,
+      "wall_seconds": 25.96152519993484
+    },
+    {
+      "rate_per_minute": 40.0,
+      "triggers": 17,
+      "router_calls": 9,
+      "avg_batch_size": 1.8888888888888888,
+      "max_batch_size": 3,
+      "avg_request_seconds": 3.087851241254347,
+      "seconds_per_decision": 1.634744774781713,
+      "wall_seconds": 27.844765399582684
+    }
+  ]
+}

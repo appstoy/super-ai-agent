@@ -1,0 +1,11 @@
+name: Bug report
+description: Report a reproducible problem
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Include commands, inputs, and observed behavior. Remove secrets.
+    validations:
+      required: true
+

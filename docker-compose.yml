@@ -1,0 +1,15 @@
+services:
+  super-agent:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      SUPER_AGENT_HOST: 0.0.0.0
+      SUPER_AGENT_PORT: 8000
+      SUPER_AGENT_DATABASE_URL: sqlite:///./data/super_agent.db
+    volumes:
+      - super-agent-data:/app/data
+
+volumes:
+  super-agent-data:
+

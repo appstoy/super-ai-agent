@@ -1,0 +1,1000 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Super Agent</title>
+<style>
+:root{
+  --bg:#fbfbfd; --panel:#fff; --ink:#1d1d1f; --ink2:#6e6e73; --ink3:#a1a1a6;
+  --line:#e6e6ea; --line2:#f0f0f3;
+  --accent:#0071e3; --accent-soft:#eaf3ff;
+  --ok:#1f9d55; --ok-soft:#eaf7ef;
+  --err:#d70015; --err-soft:#fdecee;
+  --wait:#95711c; --wait-soft:#fdf6e3;
+  --shadow:0 1px 2px rgba(0,0,0,.04), 0 8px 28px rgba(0,0,0,.06);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro SC","PingFang SC","Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --r:18px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0b0b0d; --panel:#151517; --ink:#f5f5f7; --ink2:#98989d; --ink3:#6e6e73;
+    --line:#26262a; --line2:#1e1e21;
+    --accent:#0a84ff; --accent-soft:#0d2438;
+    --ok:#30d158; --ok-soft:#10261a;
+    --err:#ff453a; --err-soft:#2c1416;
+    --wait:#ffd60a; --wait-soft:#2a2312;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 34px rgba(0,0,0,.5);
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--sans);
+  font-size:15px; line-height:1.6; min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:var(--accent-soft)}
+button,input,select,textarea{font:inherit;color:inherit}
+
+.wrap{max-width:720px;margin:0 auto;padding:0 22px 120px}
+
+/* ---------- top ---------- */
+.top{
+  display:flex;align-items:center;gap:12px;
+  padding:22px 0 0;
+}
+.top .mark{
+  width:26px;height:26px;border-radius:9px;flex:none;
+  background:linear-gradient(140deg,#0071e3,#5e5ce6);
+  box-shadow:0 2px 8px rgba(0,113,227,.28);
+}
+.top .name{font-weight:600;letter-spacing:-.01em}
+.top .spacer{flex:1}
+.top select{
+  border:1px solid var(--line);background:var(--panel);border-radius:99px;
+  padding:6px 30px 6px 13px;font-size:12.5px;color:var(--ink2);
+  appearance:none;cursor:pointer;max-width:190px;
+  background-image:linear-gradient(45deg,transparent 50%,var(--ink3) 50%),linear-gradient(135deg,var(--ink3) 50%,transparent 50%);
+  background-position:calc(100% - 15px) 51%,calc(100% - 11px) 51%;
+  background-size:4px 4px,4px 4px;background-repeat:no-repeat;
+}
+.top select:focus{outline:none;border-color:var(--accent)}
+.quiet{
+  color:var(--ink3);text-decoration:none;font-size:12.5px;padding:6px 4px;border-radius:8px;
+}
+.quiet:hover{color:var(--ink2)}
+
+.notify{
+  border:1px solid var(--line);background:var(--panel);color:var(--ink3);
+  border-radius:99px;padding:6px 12px;font-size:12.5px;cursor:pointer;
+  transition:.15s;white-space:nowrap;
+}
+.notify:hover{border-color:var(--accent);color:var(--accent)}
+.notify.on{color:var(--accent);border-color:transparent;background:var(--accent-soft)}
+
+/* a result opened from a notification should be findable at a glance */
+.card.flash{animation:flash 1.6s ease-out}
+@keyframes flash{
+  0%{box-shadow:0 0 0 3px var(--accent)}
+  100%{box-shadow:0 1px 2px rgba(0,0,0,.03)}
+}
+
+/* ---------- hero ---------- */
+.hero{padding:64px 0 30px;text-align:center}
+.hero h1{
+  font-size:clamp(30px,5.4vw,44px);line-height:1.14;letter-spacing:-.028em;
+  font-weight:650;
+}
+.hero .sub{color:var(--ink2);margin-top:12px;font-size:15.5px}
+
+.composer{
+  margin-top:30px;background:var(--panel);border:1px solid var(--line);
+  border-radius:var(--r);box-shadow:var(--shadow);
+  display:flex;align-items:flex-end;gap:10px;padding:12px 12px 12px 18px;
+  transition:border-color .18s, box-shadow .18s;
+}
+.composer:focus-within{
+  border-color:#bcd9f7;box-shadow:0 1px 2px rgba(0,0,0,.04), 0 10px 34px rgba(0,113,227,.12);
+}
+@media (prefers-color-scheme: dark){
+  .composer:focus-within{border-color:#1d4a75;box-shadow:0 12px 34px rgba(0,0,0,.5)}
+}
+.composer textarea{
+  flex:1;border:0;background:none;resize:none;outline:none;
+  padding:8px 0;max-height:190px;line-height:1.55;font-size:15.5px;
+}
+.composer textarea::placeholder{color:var(--ink3)}
+.send{
+  border:0;border-radius:12px;background:var(--accent);color:#fff;
+  padding:9px 18px;font-weight:550;font-size:14px;cursor:pointer;flex:none;
+  transition:opacity .15s,transform .12s;
+}
+.send:hover{opacity:.9}
+.send:active{transform:scale(.97)}
+.send:disabled{opacity:.4;cursor:default;transform:none}
+.send .spin{
+  display:none;width:13px;height:13px;border-radius:50%;
+  border:2px solid rgba(255,255,255,.4);border-top-color:#fff;
+  animation:spin .7s linear infinite;vertical-align:-2px;margin-right:7px;
+}
+.send.busy .spin{display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.hints{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:18px}
+.hints button{
+  border:1px solid var(--line);background:var(--panel);color:var(--ink2);
+  border-radius:99px;padding:7px 14px;font-size:12.5px;cursor:pointer;
+  transition:.15s;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.hints button:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+
+/* ---------- feed ---------- */
+.feed{margin-top:58px}
+.feed-head{display:flex;align-items:baseline;gap:12px;margin-bottom:16px;padding:0 2px}
+.feed-head h2{font-size:17px;font-weight:600;letter-spacing:-.012em}
+.feed-head .count{color:var(--ink3);font-size:12.5px}
+.feed-head .spacer{flex:1}
+.feed-head button{
+  border:0;background:none;color:var(--ink3);font-size:12.5px;cursor:pointer;
+  padding:4px 2px;border-radius:6px;
+}
+.feed-head button:hover{color:var(--accent)}
+
+.card{
+  background:var(--panel);border:1px solid var(--line);border-radius:16px;
+  padding:18px 20px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,.03);
+  animation:in .28s cubic-bezier(.2,.7,.3,1) both;
+}
+@keyframes in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+.card .meta{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+.state{
+  font-size:11.5px;font-weight:600;letter-spacing:.01em;
+  padding:3px 9px;border-radius:99px;flex:none;
+}
+.state.ok{color:var(--ok);background:var(--ok-soft)}
+.state.error{color:var(--err);background:var(--err-soft)}
+.state.active{color:var(--accent);background:var(--accent-soft)}
+.state.waiting{color:var(--wait);background:var(--wait-soft)}
+.state.muted{color:var(--ink2);background:var(--line2)}
+.card .when{color:var(--ink3);font-size:12px;margin-left:auto;flex:none}
+
+.card .ask{
+  font-size:14px;color:var(--ink2);margin-bottom:10px;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+}
+.card .verdict{
+  font-size:16.5px;line-height:1.5;letter-spacing:-.012em;
+  word-break:break-word;
+}
+.card .verdict code{
+  font-family:var(--mono);font-size:.88em;background:var(--line2);
+  padding:1.5px 5px;border-radius:5px;word-break:break-all;
+}
+.card .fail{
+  margin-top:10px;font-size:13.5px;color:var(--err);background:var(--err-soft);
+  border-radius:10px;padding:10px 13px;line-height:1.5;word-break:break-word;
+}
+
+.files{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.file{
+  display:flex;align-items:center;gap:9px;border:1px solid var(--line);
+  background:var(--bg);border-radius:11px;padding:9px 13px;cursor:pointer;
+  transition:.15s;text-align:left;max-width:100%;
+}
+.file:hover{border-color:var(--accent);background:var(--accent-soft)}
+.file .ic{font-size:15px;flex:none;line-height:1}
+.file .fn{
+  font-family:var(--mono);font-size:12.5px;font-weight:500;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:250px;
+}
+.file .fs{font-size:11.5px;color:var(--ink3);flex:none}
+
+.more{margin-top:12px}
+.more summary{
+  cursor:pointer;color:var(--ink3);font-size:12.5px;list-style:none;
+  display:inline-flex;align-items:center;gap:5px;user-select:none;
+}
+.more summary::-webkit-details-marker{display:none}
+.more summary::before{content:"›";display:inline-block;transition:.2s;font-size:15px;line-height:1}
+.more[open] summary::before{transform:rotate(90deg)}
+.more summary:hover{color:var(--accent)}
+.steps{margin-top:11px;border-left:2px solid var(--line);padding-left:15px}
+.steps li{
+  list-style:none;font-size:13px;color:var(--ink2);padding:3.5px 0;
+  display:flex;gap:8px;align-items:baseline;
+}
+.steps li .dot{
+  width:5px;height:5px;border-radius:50%;background:var(--ink3);flex:none;
+  transform:translateY(-2px);
+}
+.steps li.ok .dot{background:var(--ok)}
+.steps li.error .dot{background:var(--err)}
+.steps li.active .dot{background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+
+.empty{
+  text-align:center;color:var(--ink3);padding:56px 20px;
+  border:1px dashed var(--line);border-radius:16px;font-size:14px;
+}
+
+/* thread continuation badge bar */
+.thread-bar{
+  margin:18px auto 6px;max-width:100%;display:none;align-items:center;gap:10px;
+  background:var(--accent-soft);border:1px solid rgba(0,113,227,.25);border-radius:12px;
+  padding:8px 14px;font-size:13px;color:var(--accent);text-align:left;animation:in .2s ease;
+}
+.thread-bar.show{display:flex}
+.thread-bar .txt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:550}
+.thread-bar .cancel{
+  border:0;background:none;color:var(--accent);cursor:pointer;font-weight:600;
+  padding:2px 8px;border-radius:6px;font-size:12px;white-space:nowrap;
+}
+.thread-bar .cancel:hover{background:rgba(0,113,227,.15)}
+
+/* feed category tabs & filters */
+.filter-tabs{
+  display:flex;align-items:center;gap:6px;overflow-x:auto;padding-bottom:12px;
+  border-bottom:1px solid var(--line);margin-bottom:18px;
+}
+.ftab{
+  border:1px solid transparent;background:none;color:var(--ink2);
+  padding:6px 13px;border-radius:99px;font-size:13px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap;transition:.15s;
+}
+.ftab:hover{background:var(--line2);color:var(--ink)}
+.ftab.on{background:var(--ink);color:var(--bg);font-weight:600}
+.ftab .cnt{
+  font-size:11px;padding:1px 6px;border-radius:99px;background:rgba(128,128,128,.18);
+}
+.ftab.on .cnt{background:rgba(255,255,255,.25)}
+.fspacer{flex:1}
+.filter-btn{
+  border:1px solid var(--line);background:var(--panel);color:var(--ink2);
+  padding:6px 12px;border-radius:99px;font-size:12.5px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap;transition:.15s;
+}
+.filter-btn:hover{border-color:var(--accent);color:var(--accent)}
+.filter-btn.on{background:var(--accent-soft);border-color:rgba(0,113,227,.35);color:var(--accent);font-weight:600}
+
+/* card action bar */
+.card-actions{
+  display:flex;align-items:center;gap:8px;margin-top:14px;padding-top:12px;
+  border-top:1px solid var(--line2);
+}
+.act-btn{
+  border:0;background:none;color:var(--ink2);font-size:12.5px;cursor:pointer;
+  padding:5px 10px;border-radius:8px;display:inline-flex;align-items:center;gap:5px;
+  transition:.15s;
+}
+.act-btn:hover{background:var(--line2);color:var(--accent)}
+.act-btn.primary{color:var(--accent);font-weight:550}
+.act-btn.primary:hover{background:var(--accent-soft)}
+
+/* deep trace / step flow */
+.trace{margin-top:12px}
+.trace summary{
+  cursor:pointer;color:var(--ink3);font-size:12.5px;list-style:none;
+  display:inline-flex;align-items:center;gap:5px;user-select:none;padding:3px 0;
+}
+.trace summary::-webkit-details-marker{display:none}
+.trace summary::before{content:"›";display:inline-block;transition:.2s;font-size:14px;line-height:1}
+.trace[open] summary::before{transform:rotate(90deg)}
+.trace summary:hover{color:var(--accent)}
+
+.step-list{margin-top:12px;border-left:2px solid var(--line);padding-left:14px}
+.step-item{list-style:none;margin-bottom:14px;font-size:13px}
+.step-head{display:flex;align-items:baseline;gap:8px}
+.step-item .dot{
+  width:6px;height:6px;border-radius:50%;background:var(--ink3);flex:none;
+  transform:translateY(-2px);
+}
+.step-item.ok .dot{background:var(--ok)}
+.step-item.error .dot{background:var(--err)}
+.step-item.active .dot{background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.step-title{font-weight:600;color:var(--ink);letter-spacing:-.01em}
+.step-summary{color:var(--ink2);font-size:12.5px;margin:2px 0 6px 14px;line-height:1.5}
+
+/* step detail drawer / deep evidence */
+.sub-trace{margin:4px 0 0 14px}
+.sub-trace summary{
+  cursor:pointer;color:var(--accent);font-size:11.5px;font-family:var(--mono);
+  list-style:none;display:inline-flex;align-items:center;gap:4px;
+}
+.sub-trace summary::-webkit-details-marker{display:none}
+.sub-trace summary::before{content:"▾";display:inline-block;font-size:10px}
+.sub-trace[open] summary::before{content:"▴"}
+.evidence-box{
+  background:var(--bg);border:1px solid var(--line);border-radius:10px;
+  padding:10px 12px;margin-top:6px;font-size:12px;
+}
+.ev-row{margin-bottom:8px}
+.ev-row:last-child{margin-bottom:0}
+.ev-label{
+  display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;
+  color:var(--ink2);margin-bottom:3px;
+}
+.ev-badge{
+  font-family:var(--mono);font-size:10px;padding:1px 5px;border-radius:4px;
+  background:var(--line2);color:var(--ink3);font-weight:normal;
+}
+.ev-content{
+  font-family:var(--mono);font-size:11.5px;color:var(--ink);
+  white-space:pre-wrap;word-break:break-all;line-height:1.55;
+  max-height:220px;overflow-y:auto;background:var(--panel);
+  padding:6px 8px;border-radius:6px;border:1px solid var(--line2);
+}
+
+/* ---------- viewer ---------- */
+.viewer{
+  border:0;padding:0;width:min(1000px,92vw);height:min(760px,86vh);
+  border-radius:18px;background:var(--panel);box-shadow:0 24px 80px rgba(0,0,0,.3);
+  overflow:hidden;color:var(--ink);
+}
+.viewer::backdrop{background:rgba(0,0,0,.42);backdrop-filter:blur(3px)}
+.viewer .vhead{
+  display:flex;align-items:center;gap:12px;padding:13px 16px;
+  border-bottom:1px solid var(--line);background:var(--panel);
+}
+.viewer .vhead .vn{
+  font-family:var(--mono);font-size:12.5px;font-weight:500;flex:1;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.viewer .vhead a,.viewer .vhead button{
+  border:1px solid var(--line);background:none;border-radius:9px;
+  padding:6px 12px;font-size:12.5px;cursor:pointer;color:var(--ink2);
+  text-decoration:none;white-space:nowrap;
+}
+.viewer .vhead a:hover,.viewer .vhead button:hover{border-color:var(--accent);color:var(--accent)}
+.viewer iframe{width:100%;height:calc(100% - 52px);border:0;background:#fff;display:block}
+.viewer pre{
+  margin:0;padding:20px;height:calc(100% - 52px);overflow:auto;
+  font-family:var(--mono);font-size:12.5px;line-height:1.7;white-space:pre-wrap;
+  word-break:break-word;background:var(--bg);
+}
+
+.foot{
+  margin-top:52px;text-align:center;color:var(--ink3);font-size:12px;
+}
+.foot a{color:inherit;text-decoration:none;border-bottom:1px solid var(--line)}
+.foot a:hover{color:var(--ink2)}
+
+.toast{
+  position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(20px);
+  background:var(--ink);color:var(--bg);padding:10px 20px;border-radius:99px;
+  font-size:13.5px;opacity:0;pointer-events:none;transition:.26s;z-index:90;
+  max-width:88vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div class="mark"></div>
+    <div class="name">Super Agent</div>
+    <div class="spacer"></div>
+    <select id="model" aria-label="模型"></select>
+    <button class="notify" id="notify-toggle" type="button" title="完成后弹出桌面通知">通知</button>
+    <a class="quiet" href="/ops">运维</a>
+  </div>
+
+  <section class="hero">
+    <h1>你想让它做什么？</h1>
+    <p class="sub">说一句话就行。它会真的把东西做出来给你。</p>
+    <div class="thread-bar" id="thread-bar">
+      <span>💬</span>
+      <span class="txt" id="thread-msg">正在续接上下文…</span>
+      <button class="cancel" id="thread-cancel" type="button">✕ 结束续接，发起新任务</button>
+    </div>
+    <form class="composer" id="composer">
+      <textarea id="input" rows="1" placeholder="例如：做一个介绍 CSS Grid 的网页，存成 grid.html"></textarea>
+      <button class="send" id="send" type="submit"><span class="spin"></span>开始</button>
+    </form>
+    <div class="hints" id="hints"></div>
+  </section>
+
+  <section class="feed">
+    <div class="filter-tabs">
+      <button class="ftab on" data-cat="all" type="button">全部 <span class="cnt" id="c-all">0</span></button>
+      <button class="ftab" data-cat="running" type="button">正在进行 <span class="cnt" id="c-running">0</span></button>
+      <button class="ftab" data-cat="succeeded" type="button">已经做好 <span class="cnt" id="c-succeeded">0</span></button>
+      <button class="ftab" data-cat="failed" type="button">执行失败 <span class="cnt" id="c-failed">0</span></button>
+      <button class="ftab" data-cat="cancelled" type="button">已取消 <span class="cnt" id="c-cancelled">0</span></button>
+      <div class="fspacer"></div>
+      <button class="filter-btn" id="f-artifacts" type="button">📄 只看产出文件</button>
+    </div>
+    <div id="list"><div class="empty">还没有做过事情。上面写一句试试。</div></div>
+  </section>
+
+  <div class="foot">任务跑在你自己机器上 · <a href="/docs">接口文档</a></div>
+</div>
+
+<dialog class="viewer" id="viewer">
+  <div class="vhead">
+    <div class="vn" id="vn"></div>
+    <a id="vopen" href="#" target="_blank" rel="noopener">新窗口</a>
+    <button id="vclose">关闭</button>
+  </div>
+  <iframe id="vframe" src="about:blank" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+  <pre id="vtext" style="display:none"></pre>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const S = {
+  items: new Map(),
+  category: "all",
+  onlyArtifacts: false,
+  continueThreadId: null,
+  continueTaskTitle: null,
+  seq: 0,
+};
+
+const EXAMPLES = [
+  "做一个介绍 CSS Grid 的网页，存成 grid.html",
+  "把 README 前 5 行摘出来，写成 summary.txt",
+  "写一个能跑的 Python 脚本，统计文本词频",
+];
+
+const STATE = {
+  pending: ["排队中", "waiting"], running: ["正在做", "active"],
+  waiting: ["等你确认", "waiting"], succeeded: ["做好了", "ok"],
+  failed: ["没做成", "error"], cancelled: ["已取消", "muted"],
+  timed_out: ["超时了", "error"], cancel_requested: ["正在停止", "waiting"],
+};
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function md(s) {
+  return esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+function bytes(n) {
+  if (n == null) return "";
+  if (n < 1024) return n + " B";
+  if (n < 1024 * 1024) return (n / 1024).toFixed(n < 10240 ? 1 : 0) + " KB";
+  return (n / 1048576).toFixed(1) + " MB";
+}
+function when(iso) {
+  if (!iso) return "";
+  const d = new Date(iso), now = Date.now(), diff = (now - d.getTime()) / 1000;
+  if (diff < 45) return "刚刚";
+  if (diff < 3600) return Math.floor(diff / 60) + " 分钟前";
+  if (diff < 86400 && d.getDate() === new Date().getDate())
+    return d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+  if (diff < 86400 * 7) return Math.floor(diff / 86400) + " 天前";
+  return d.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+}
+
+async function api(path, init) {
+  const r = await fetch(path, init);
+  if (!r.ok) {
+    let detail = r.statusText;
+    try { detail = (await r.json()).detail || detail; } catch {}
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
+  return r.json();
+}
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+/* ---- desktop notification ----
+   A task can run for minutes, so the page cannot be the only place a result
+   shows up. Two rules keep this from being noise:
+   1. Ask permission once, only after the user submits something. A permission
+      prompt on first paint is hostile, and browsers penalise the asking.
+   2. Only notify when the page is NOT visible. If the user is looking at the
+      feed, the card appears in front of them and a system popup would be a
+      second copy of the same news.
+   Clicking the notification focuses this tab and opens that result. */
+const Notify = {
+  supported: () => typeof window.Notification !== "undefined",
+  granted: () => Notify.supported() && Notification.permission === "granted",
+  asked: false,
+
+  async ask() {
+    if (!Notify.supported() || Notification.permission !== "default") return;
+    if (Notify.asked) return;
+    Notify.asked = true;
+    try { await Notification.requestPermission(); } catch {}
+    paintNotifyButton();
+  },
+
+  show(title, body, taskId) {
+    if (!Notify.granted() || document.visibilityState === "visible") return false;
+    try {
+      const n = new Notification(title, {
+        body,
+        tag: "task-" + (taskId || Date.now()),
+        icon: "/favicon.ico",
+        silent: false,
+      });
+      n.onclick = () => {
+        window.focus();
+        n.close();
+        if (taskId) revealResult(taskId);
+      };
+      setTimeout(() => n.close(), 12000);
+      return true;
+    } catch { return false; }
+  },
+};
+
+function paintNotifyButton() {
+  const btn = $("notify-toggle");
+  if (!btn) return;
+  if (!Notify.supported()) { btn.style.display = "none"; return; }
+  const p = Notification.permission;
+  btn.style.display = "";
+  if (p === "granted") {
+    btn.textContent = "通知已开";
+    btn.classList.add("on");
+    btn.title = "完成后会弹出桌面通知";
+  } else if (p === "denied") {
+    btn.textContent = "通知被拦截";
+    btn.classList.remove("on");
+    btn.title = "浏览器已拦截通知，请在地址栏左侧的站点设置里允许";
+  } else {
+    btn.textContent = "开启通知";
+    btn.classList.remove("on");
+    btn.title = "完成后弹出桌面通知";
+  }
+}
+
+$("notify-toggle").onclick = async () => {
+  if (!Notify.supported()) return;
+  if (Notification.permission === "granted") {
+    toast("通知已经开着了");
+    return;
+  }
+  if (Notification.permission === "denied") {
+    toast("浏览器已拦截通知，去地址栏左侧的站点设置里改成允许");
+    return;
+  }
+  await Notify.ask();
+  if (Notify.granted()) toast("好了，做完会通知你");
+};
+
+function revealResult(taskId) {
+  const el = document.querySelector('article.card[data-id="' + taskId + '"]');
+  if (el) {
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.remove("flash");
+    void el.offsetWidth;
+    el.classList.add("flash");
+    return;
+  }
+  loadFeed().then(() => {
+    const again = document.querySelector('article.card[data-id="' + taskId + '"]');
+    if (again) again.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+}
+
+/* ---------- render ---------- */
+/* ---------- Context Continuation Mode ---------- */
+function startContinuation(threadId, title) {
+  if (!threadId) { toast("该任务缺少上下文线索，无法续接"); return; }
+  S.continueThreadId = threadId;
+  S.continueTaskTitle = title || "当前任务";
+  $("thread-msg").textContent = "正在续接：" + S.continueTaskTitle + "（大模型将保留前序所有记忆）";
+  $("thread-bar").classList.add("show");
+  $("input").placeholder = "例如：把刚才生成的页面背景改成暗色、增加一个图表…";
+  $("input").scrollIntoView({ behavior: "smooth", block: "center" });
+  $("input").focus();
+  toast("已载入前序对话上下文");
+}
+
+function cancelContinuation() {
+  S.continueThreadId = null;
+  S.continueTaskTitle = null;
+  $("thread-bar").classList.remove("show");
+  $("input").placeholder = "例如：做一个介绍 CSS Grid 的网页，存成 grid.html";
+}
+$("thread-cancel").onclick = cancelContinuation;
+
+function cardHtml(r) {
+  const [text, tone] = STATE[r.status] || [r.status, "muted"];
+  const live = ["pending", "running", "waiting", "cancel_requested"].includes(r.status);
+  const parts = [];
+
+  parts.push('<div class="meta">');
+  parts.push('<span class="state ' + tone + '">' + esc((r.state && r.state.text) || text) + '</span>');
+  if (live) parts.push('<span class="state active">进行中</span>');
+  if (r.duration_seconds != null) parts.push('<span class="duration">用了 ' + r.duration_seconds + ' 秒</span>');
+  parts.push('<span class="when">' + esc(when(r.finished_at || r.started_at)) + '</span>');
+  parts.push('</div>');
+
+  if (r.ask && r.ask !== r.conclusion) {
+    parts.push('<div class="ask">“' + esc(r.ask) + '”</div>');
+  } else if (r.title && r.title !== r.conclusion) {
+    parts.push('<div class="ask">“' + esc(r.title) + '”</div>');
+  }
+
+  parts.push('<div class="verdict">' + md(r.conclusion) + '</div>');
+
+  if (r.error && r.error !== r.conclusion) {
+    parts.push('<div class="fail">' + esc(r.error) + '</div>');
+  }
+
+  const arts = r.artifacts || [];
+  if (arts.length) {
+    parts.push('<div class="files">');
+    for (const a of arts) {
+      const ic = /\.(html?|htm)$/i.test(a.name) ? "🌐" : /\.(md|txt)$/i.test(a.name) ? "📝" : /\.(py|js|css|json)$/i.test(a.name) ? "⚙️" : "📄";
+      parts.push('<button class="file" data-file="' + esc(a.path) + '" type="button">' +
+        '<span class="ic">' + ic + '</span>' +
+        '<span class="fn">' + esc(a.name) + '</span>' +
+        '<span class="fs">' + bytes(a.size) + '</span></button>');
+    }
+    parts.push('</div>');
+  }
+
+  // Deep Process Trace
+  const steps = r.steps || [];
+  if (steps.length) {
+    parts.push('<details class="trace"><summary>看看它是怎么做的（包含初筛、工具和参数细节）</summary><ul class="step-list">');
+    for (const s of steps) {
+      parts.push('<li class="step-item ' + esc(s.kind || "info") + '">');
+      parts.push('<div class="step-head"><span class="dot"></span><span class="step-title">' + esc(s.text) + '</span></div>');
+      if (s.summary && s.summary !== s.text) {
+        parts.push('<div class="step-summary">' + esc(s.summary) + '</div>');
+      }
+      if (s.details && s.details.length) {
+        parts.push('<details class="sub-trace"><summary>查看底层参数与真实证据</summary><div class="evidence-box">');
+        for (const dt of s.details) {
+          parts.push('<div class="ev-row">');
+          parts.push('<div class="ev-label">' + esc(dt.label) + (dt.badge ? '<span class="ev-badge">' + esc(dt.badge) + '</span>' : '') + '</div>');
+          parts.push('<div class="ev-content">' + esc(dt.content) + '</div>');
+          parts.push('</div>');
+        }
+        parts.push('</div></details>');
+      }
+      parts.push('</li>');
+    }
+    parts.push('</ul></details>');
+  }
+
+  // Card action bar
+  parts.push('<div class="card-actions">');
+  if (r.thread_id) {
+    parts.push('<button class="act-btn primary" data-continue="' + esc(r.thread_id) + '" data-title="' + esc(r.ask || r.title || "") + '" type="button">💬 基于此任务继续</button>');
+  }
+  if (r.artifacts && r.artifacts.length && r.open_url) {
+    parts.push('<button class="act-btn" data-file="' + esc(r.artifacts[0].path) + '" type="button">👁️ 预览首选产物</button>');
+  }
+  parts.push('</div>');
+
+  return '<article class="card" id="r-' + esc(r.task_id) + '" data-id="' + esc(r.task_id) + '">' + parts.join("") + '</article>';
+}
+
+function updateCategoryCounts(all) {
+  const counts = { all: all.length, running: 0, succeeded: 0, failed: 0, cancelled: 0 };
+  for (const item of all) {
+    if (["pending", "running", "waiting", "cancel_requested"].includes(item.status)) counts.running++;
+    else if (item.status === "succeeded") counts.succeeded++;
+    else if (["failed", "timed_out"].includes(item.status)) counts.failed++;
+    else if (item.status === "cancelled") counts.cancelled++;
+  }
+  $("c-all").textContent = counts.all;
+  $("c-running").textContent = counts.running;
+  $("c-succeeded").textContent = counts.succeeded;
+  $("c-failed").textContent = counts.failed;
+  $("c-cancelled").textContent = counts.cancelled;
+}
+
+function render() {
+  const list = $("list");
+  const all = [...S.items.values()].sort((a, b) => {
+    const av = String(a.finished_at || a.started_at || "");
+    const bv = String(b.finished_at || b.started_at || "");
+    if (av && bv && av !== bv) return av < bv ? 1 : -1;
+    return (b._seq || 0) - (a._seq || 0);
+  });
+
+  updateCategoryCounts(all);
+
+  let filtered = all.filter((r) => {
+    if (S.category === "running") return ["pending", "running", "waiting", "cancel_requested"].includes(r.status);
+    if (S.category === "succeeded") return r.status === "succeeded";
+    if (S.category === "failed") return ["failed", "timed_out"].includes(r.status);
+    if (S.category === "cancelled") return r.status === "cancelled";
+    return true;
+  });
+
+  if (S.onlyArtifacts) {
+    filtered = filtered.filter((r) => r.artifacts && r.artifacts.length > 0);
+  }
+
+  if (!filtered.length) {
+    const emptyHint = S.onlyArtifacts
+      ? "没有找到生成了产物文件的任务。"
+      : S.category !== "all"
+      ? "当前分类下暂无任务。"
+      : "还没有做过事情。上面写一句试试。";
+    list.innerHTML = '<div class="empty">' + emptyHint + '</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(cardHtml).join("");
+
+  list.querySelectorAll("[data-file]").forEach((b) => {
+    b.onclick = () => openFile(b.dataset.file);
+  });
+
+  list.querySelectorAll("[data-continue]").forEach((b) => {
+    b.onclick = () => startContinuation(b.dataset.continue, b.dataset.title);
+  });
+}
+
+/* ---------- viewer ---------- */
+async function openFile(path) {
+  const target = "/files/" + path.split("/").map(encodeURIComponent).join("/");
+  const isHtml = /\.(html?|htm|svg)$/i.test(path);
+  $("vn").textContent = path;
+  $("vopen").href = target;
+  $("vopen").style.display = isHtml ? "" : "none";
+  const frame = $("vframe"), pre = $("vtext");
+  if (isHtml) {
+    pre.style.display = "none"; frame.style.display = "";
+    frame.src = target;
+  } else {
+    frame.style.display = "none"; frame.src = "about:blank";
+    pre.style.display = ""; pre.textContent = "读取中…";
+    try {
+      const d = await api("/api/files/content?path=" + encodeURIComponent(path));
+      pre.textContent = d.text + (d.truncated ? "\n\n… （后面还有，已截断）" : "");
+    } catch (e) { pre.textContent = "打不开：" + e.message; }
+  }
+  $("viewer").showModal();
+}
+$("vclose").onclick = () => { $("viewer").close(); $("vframe").src = "about:blank"; };
+$("viewer").addEventListener("close", () => { $("vframe").src = "about:blank"; });
+
+/* ---------- feed ---------- */
+const TERMINAL = ["succeeded", "failed", "cancelled", "timed_out"];
+
+async function loadFeed() {
+  try {
+    const d = await api("/api/results?limit=30");
+    for (const item of d.items || []) {
+      const known = S.items.get(item.task_id);
+      if (known) {
+        item._seq = known._seq;
+        // Carry the announcement flag across the refresh, otherwise the same
+        // finished task re-notifies on every poll.
+        item._announced = known._announced;
+        // The feed is also the only observer of tasks submitted from another
+        // tab or before a reload: if one reaches a terminal state while this
+        // page is open, say so - once.
+        if (!TERMINAL.includes(known.status) && TERMINAL.includes(item.status)) {
+          S.items.set(item.task_id, item);
+          announce(item);
+          continue;
+        }
+      } else {
+        item._seq = ++S.seq;
+        // A task that already finished before this page loaded must not fire a
+        // notification for an event the user never waited for.
+        if (TERMINAL.includes(item.status)) item._announced = true;
+      }
+      S.items.set(item.task_id, item);
+    }
+    render();
+  } catch (e) {
+    toast("读不到结果：" + e.message);
+  }
+}
+
+function upsert(result) {
+  const known = S.items.get(result.task_id);
+  if (!known) {
+    result._seq = ++S.seq;
+  } else {
+    result._seq = known._seq;
+    // Carry the "already told the user" flag across every replacement.
+    // Without this, each refresh produced a fresh object with the flag unset,
+    // so the same finished task re-announced on every poll.
+    if (known._announced) result._announced = true;
+  }
+  S.items.set(result.task_id, result);
+  render();
+}
+
+/* ---------- submit ---------- */
+async function submit(text) {
+  const message = text.trim();
+  if (!message) return;
+  Notify.ask();
+
+  $("send").disabled = true;
+  $("send").classList.add("busy");
+  $("input").value = "";
+  autoGrow();
+
+  const payload = {
+    message,
+    model: $("model").value || null,
+  };
+  if (S.continueThreadId) {
+    payload.thread_id = S.continueThreadId;
+  }
+
+  const placeholder = {
+    task_id: "pending-" + Date.now(),
+    thread_id: S.continueThreadId,
+    title: message,
+    ask: message,
+    status: "pending",
+    state: { text: "排队中", tone: "waiting" },
+    conclusion: S.continueThreadId ? "已载入前序上下文，正在继续对话与执行…" : "已经收到，开始安排了。",
+    artifacts: [],
+    steps: [
+      { text: "收到任务", kind: "info", summary: S.continueThreadId ? "续接已有对话线程" : "开启新任务" }
+    ],
+    finished_at: new Date().toISOString(),
+  };
+  upsert(placeholder);
+
+  if (S.continueThreadId) {
+    cancelContinuation();
+  }
+
+  try {
+    const d = await api("/api/tasks/async", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    poll(d.dedupe_key, placeholder.task_id, message);
+  } catch (e) {
+    upsert({ ...placeholder, status: "failed", state: { text: "没做成", tone: "error" },
+             conclusion: "没能提交成功。", error: e.message });
+    toast("提交失败：" + e.message);
+  } finally {
+    $("send").disabled = false;
+    $("send").classList.remove("busy");
+  }
+}
+
+function poll(dedupeKey, tempId, message) {
+  let tries = 0;
+  const tick = async () => {
+    tries += 1;
+    if (tries > 900) { finish(tempId, "超时了，去运维视图看看。"); return; }
+    let st;
+    try {
+      st = await api("/api/tasks/status?dedupe_key=" + encodeURIComponent(dedupeKey));
+    } catch { setTimeout(tick, 1200); return; }
+
+    const terminal = ["succeeded", "failed", "cancelled", "completed", "ignored", "timed_out"];
+    if (st.task_id) {
+      try {
+        const r = await api("/api/tasks/" + st.task_id + "/result");
+        r._seq = S.items.get(tempId)?._seq || ++S.seq;
+        if (tempId !== r.task_id) S.items.delete(tempId);
+        upsert(r);
+        if (terminal.includes(r.status) || terminal.includes(String(st.status))) {
+          announce(r);
+          return;
+        }
+      } catch {}
+    } else if (terminal.includes(String(st.status))) {
+      finish(tempId, st.text || "处理完了，但没有产出内容。");
+      return;
+    }
+    setTimeout(tick, 1100);
+  };
+  setTimeout(tick, 700);
+}
+
+/* ---- one place decides what a finished task tells the user ----
+   Both the submit poller and the background feed poller can reach a terminal
+   state, so announcing from either call site produced duplicate popups. The
+   `_announced` guard lives on the result object itself, which is the single
+   record of "this outcome has already been reported". */
+function announce(result) {
+  if (!result || result._announced) return;
+  result._announced = true;
+
+  const ok = result.status === "succeeded";
+  const files = (result.artifacts || []).length;
+  const head = ok ? "做好了" : result.status === "cancelled" ? "已取消" : "没做成";
+  const detail = ok
+    ? (files ? result.conclusion + "（" + files + " 个文件）" : result.conclusion)
+    : (result.error || result.conclusion || "");
+
+  toast(head + (ok ? "" : "：" + detail.slice(0, 40)));
+  Notify.show(
+    head + " · " + String(result.ask || result.title || "").slice(0, 40),
+    detail.slice(0, 160),
+    result.task_id,
+  );
+}
+
+function finish(tempId, reason) {
+  const cur = S.items.get(tempId);
+  if (!cur) return;
+  const failed = { ...cur, status: "failed", state: { text: "没做成", tone: "error" }, error: reason };
+  upsert(failed);
+  // A give-up is still an outcome the user is waiting on: the page stopped
+  // watching, so if they walked away they must still be told.
+  announce(S.items.get(tempId));
+}
+
+/* ---------- boot ---------- */
+function autoGrow() {
+  const el = $("input");
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 190) + "px";
+}
+
+$("input").addEventListener("input", autoGrow);
+$("input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    submit($("input").value);
+  }
+});
+$("composer").addEventListener("submit", (e) => {
+  e.preventDefault();
+  submit($("input").value);
+});
+document.querySelectorAll(".ftab").forEach((btn) => {
+  btn.onclick = () => {
+    document.querySelectorAll(".ftab").forEach((b) => b.classList.remove("on"));
+    btn.classList.add("on");
+    S.category = btn.dataset.cat;
+    render();
+  };
+});
+
+$("f-artifacts").onclick = () => {
+  S.onlyArtifacts = !S.onlyArtifacts;
+  $("f-artifacts").classList.toggle("on", S.onlyArtifacts);
+  render();
+};
+
+$("hints").innerHTML = EXAMPLES.map((x) => '<button type="button">' + esc(x) + "</button>").join("");
+$("hints").querySelectorAll("button").forEach((b) => {
+  b.onclick = () => { $("input").value = b.textContent; autoGrow(); $("input").focus(); };
+});
+
+(async () => {
+  try {
+    const d = await api("/api/models");
+    const list = d.models || [];
+    $("model").innerHTML = list.map((m) =>
+      '<option value="' + esc(m.id) + '">' + esc(m.display_name || m.id) + "</option>").join("");
+    if (d.active) $("model").value = d.active;
+  } catch {
+    $("model").innerHTML = '<option value="">默认模型</option>';
+  }
+  paintNotifyButton();
+  await loadFeed();
+  $("input").focus();
+})();
+
+// While hidden, poll faster so a notification arrives promptly; when visible,
+// the feed refresh is only needed to pick up progress.
+setInterval(() => {
+  const live = [...S.items.values()].some((r) =>
+    ["pending", "running", "waiting", "cancel_requested"].includes(r.status));
+  if (live || document.visibilityState !== "visible") loadFeed();
+}, 4000);
+
+document.addEventListener("visibilitychange", () => {
+  paintNotifyButton();
+  if (document.visibilityState === "visible") loadFeed();
+});
+</script>
+</body>
+</html>
