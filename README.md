@@ -1,5 +1,18 @@
 # Super AI Agent
 
+说一句话，它真的把东西做出来给你 —— 事件驱动的持久化 Agent 运行时。跑在你自己机器上，
+产物落在你自己的磁盘上。
+
+**能做什么**：输入框里打 `/` 选技能（或直接说），它自己规划、调用工具、写出真实文件，
+做完给你一个能直接打开的结果。有缓存命中、轮次、工具调用等运行指标，也有置顶/归档/配色
+和产物文件架。
+
+**工具 vs 技能**：工具是"能做什么"（读文件、写文件、列目录、你自己注册的 Python 函数）；
+技能是"知道怎么做"（带 `SKILL.md` 的说明手册，只在被选中时才进入提示词）。见
+[技能文档](docs/skills.md)。
+
+---
+
 Super AI Agent is an event-driven, persistent Agent platform inspired by the Router/Worker Super-agent architecture described in the project research documents.
 
 The repository now implements the full article architecture (see `docs/article-conformance.md`): a resident Router session with global memory and trigger batching, two-level event filtering, many-to-many subscription fan-out, an asynchronous ReAct loop (`task.start/stop/status` with completion re-injection), channel-aware delivery, chain-of-recall (`recall.read`), human-gated speculative execution, BYOM endpoint daemons, and a model-driven Watchdog control loop — on top of the Phase 0-6 foundation and Phase 7 runtime bridge: Router/Worker orchestration, persistent Outbox and Trigger ingress, asynchronous task acceptance, durable status polling, same-Thread Worker resumption, safe local file reading, Run leases and bounded retries, persistent Watchdog recovery, context recall, plugin contracts, work-channel adapters, and a task control API. Model providers are isolated behind the provider-neutral `ModelGateway`, with deterministic mocks for offline tests and OpenAI-compatible adapters for real services, including Magpie's local hosted-model gateway.
