@@ -476,6 +476,70 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         finally:
             engine.dispose()
 
+    @app.get("/api/artifacts")
+    def all_artifacts(limit: int = 200) -> dict[str, object]:
+        """Aggregate all generated artifacts across all tasks for the files shelf.
+
+        Users shouldn't have to scroll through dozens of historical task cards
+        just to find an HTML file or script that was created earlier. This
+        scans the cache root, groups files with their originating task title,
+        and provides direct preview URLs.
+        """
+
+        bounded = max(1, min(limit, 1000))
+        root = (workspace_root / active_settings.cache_dir_name).resolve()
+        if not root.is_dir():
+            return {"artifacts": [], "count": 0}
+
+        # Build task prefix -> task title map from database
+        engine = create_engine_for_url(database_url)
+        factory = create_session_factory(engine)
+        title_map: dict[str, str] = {}
+        try:
+            with session_scope(factory) as session:
+                for row in session.query(TaskRecord.id, TaskRecord.title).all():
+                    short_id = str(row[0]).replace("-", "")[:8]
+                    title_map[short_id] = str(row[1])
+        finally:
+            engine.dispose()
+
+        artifacts: list[dict[str, object]] = []
+        preview_suffixes = {".html", ".htm", ".md", ".txt", ".json", ".svg", ".css", ".js", ".py"}
+
+        for child in sorted(root.iterdir(), key=lambda p: p.stat().st_mtime if p.is_dir() else 0, reverse=True):
+            if not child.is_dir():
+                continue
+            folder_prefix = child.name.split("-")[0]
+            task_title = title_map.get(folder_prefix, child.name)
+
+            for f in sorted(child.rglob("*")):
+                if not f.is_file():
+                    continue
+                if len(artifacts) >= bounded:
+                    break
+                try:
+                    stat = f.stat()
+                except OSError:
+                    continue
+
+                rel_path = f.relative_to(workspace_root).as_posix()
+                suffix = f.suffix.lower()
+                is_previewable = suffix in preview_suffixes
+                artifacts.append({
+                    "name": f.name,
+                    "path": rel_path,
+                    "size": stat.st_size,
+                    "modified_at": datetime.fromtimestamp(stat.st_mtime, UTC).isoformat(),
+                    "task_title": task_title,
+                    "task_folder": child.name,
+                    "previewable": is_previewable,
+                    "open_url": f"/files/{rel_path}" if suffix in {".html", ".htm"} else None,
+                })
+            if len(artifacts) >= bounded:
+                break
+
+        return {"artifacts": artifacts, "count": len(artifacts)}
+
     @app.get("/files/{path:path}", response_class=HTMLResponse)
     def serve_workspace_file(path: str) -> HTMLResponse:
         """Serve a workspace artifact directly so HTML previews actually render."""

@@ -42,7 +42,7 @@ def _client(tmp_path, monkeypatch, gateway=None) -> TestClient:
     return TestClient(create_app(settings))
 
 
-def test_page_exposes_categories_and_artifact_filter(tmp_path, monkeypatch) -> None:
+def test_page_exposes_categories_and_artifact_shelf(tmp_path, monkeypatch) -> None:
     with _client(tmp_path, monkeypatch) as client:
         page = client.get("/").text
         # Category tabs
@@ -51,9 +51,11 @@ def test_page_exposes_categories_and_artifact_filter(tmp_path, monkeypatch) -> N
         assert 'data-cat="succeeded"' in page
         assert 'data-cat="failed"' in page
         assert 'data-cat="cancelled"' in page
-        # Artifact filter button
+        # Artifact filter button and dedicated shelf
         assert 'id="f-artifacts"' in page
-        assert "只看产出文件" in page
+        assert 'id="artifacts-shelf"' in page
+        assert 'id="shelf-search"' in page
+        assert "产出文件" in page
 
 
 def test_page_exposes_context_continuation_elements(tmp_path, monkeypatch) -> None:

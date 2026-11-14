@@ -156,6 +156,29 @@ def test_results_feed_returns_newest_first(tmp_path, monkeypatch) -> None:
         assert seen == list(reversed(ids)), "the feed must be newest-first"
 
 
+def test_all_artifacts_endpoint_aggregates_files(tmp_path, monkeypatch) -> None:
+    """GET /api/artifacts must group generated files for the shelf."""
+
+    with _client(tmp_path, monkeypatch) as client:
+        task_id = _submit(client, "生成用于产物架的文件")
+
+        # Fake an artifact in the task folder
+        short = task_id.replace("-", "")[:8]
+        folder = tmp_path / "workspace" / "项目缓存文件" / f"{short}-probe"
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "shelf_item.html").write_text("<h2>shelf</h2>", encoding="utf-8")
+
+        res = client.get("/api/artifacts")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["count"] >= 1
+        names = [a["name"] for a in data["artifacts"]]
+        assert "shelf_item.html" in names
+        item = next(a for a in data["artifacts"] if a["name"] == "shelf_item.html")
+        assert item["previewable"] is True
+        assert item["open_url"] is not None
+
+
 def test_result_projection_survives_a_stopped_task(tmp_path, monkeypatch) -> None:
     """A stopped task still has to explain itself without a delivery row."""
 

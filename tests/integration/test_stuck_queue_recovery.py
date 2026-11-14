@@ -285,7 +285,7 @@ def test_runtime_summary_lists_the_actual_live_runs(tmp_path, monkeypatch) -> No
     monkeypatch.setattr(
         "super_agent.api.MagpieModelGateway", lambda *a, **k: recover_gateway()
     )
-    settings = Settings(database_url=database_url, model_name="test-model")
+    settings = Settings(database_url=database_url, model_name=None)
     with TestClient(create_app(settings)) as client:
         summary = client.get("/api/runtime/summary").json()
 
