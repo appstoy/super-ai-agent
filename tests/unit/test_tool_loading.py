@@ -83,7 +83,13 @@ def test_load_user_tools_from_files_and_manifest(tmp_path: Path) -> None:
     )
     assert any("broken" in label or "broken" in reason for label, reason in report.failed)
     assert any("no_such_module_xyz" in label for label, _ in report.failed)
-    assert report.builtin == ("file.read", "file.write", "file.list")
+    assert report.builtin == (
+        "file.read",
+        "file.write",
+        "file.list",
+        "skill.list",
+        "skill.read",
+    )
     assert set(report.loaded) == {"greet", "fixed"}
     result = registry.execute(
         "greet", {"name": "Ada"}, ExecutionContext(granted_capabilities=capabilities)
@@ -168,7 +174,16 @@ def test_cli_tools_command_reports_json(tmp_path: Path, monkeypatch, capsys) -> 
     )
     assert main(["tools"]) == 0
     payload = json.loads(capsys.readouterr().out)
-    assert payload["builtin"] == ["file.read", "file.write", "file.list"]
+    # skill.list/skill.read are always present now: a skill installed while
+    # the server runs is readable immediately, so the tools cannot depend on
+    # a non-empty library at startup.
+    assert payload["builtin"] == [
+        "file.read",
+        "file.write",
+        "file.list",
+        "skill.list",
+        "skill.read",
+    ]
     assert "greet" in payload["loaded"]
     assert "custom.fixed" in payload["capabilities"]
 

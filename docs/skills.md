@@ -69,9 +69,50 @@ There are two paths, and both matter:
 An unknown name in the selection is reported to the model rather than dropped —
 silently running without the playbook the user chose is the worse failure.
 
+## Installing a skill
+
+Three ways in, all landing in the same library folder:
+
+    # from a folder of skills (or one skill folder)
+    super-agent skills install ./my-skills
+
+    # from a git repository
+    super-agent skills install https://github.com/someone/skills.git
+    super-agent skills install someone/skills            # GitHub shorthand
+    super-agent skills install someone/skills --ref dev  # branch or tag
+
+    # or just copy the folder in yourself
+    cp -r my-skill <library>/
+
+```
+super-agent skills path      # where the library lives (default <workspace>/skills)
+super-agent skills list      # what is installed
+super-agent skills remove X  # undo an install
+```
+
+**No restart needed.** The library re-checks its folder stamps before each read,
+so a folder that appears while the server is running shows up on the next page
+refresh — for the picker, for the task payload, and for the model's
+`skill.list` / `skill_read`. The check is two `stat` calls per skill folder and
+skips re-parsing entirely when nothing moved.
+
+### What install refuses to do
+
+- **Land a broken skill.** Every candidate is parsed first; anything without a
+  `description` is reported in `skipped` and the rest still install.
+- **Overwrite silently.** An existing name is skipped unless you pass `--force`.
+- **Delete your work.** `remove` only deletes folders recorded in
+  `<library>/.installed.json`, so a hand-written skill is never removed, even
+  if the name matches.
+- **Touch a folder you made.** Installing over a hand-written folder of the same
+  name needs `--force` too.
+
 ## CLI
 
-    super-agent skills
+    super-agent skills list
+    super-agent skills install <folder|git-url|owner/repo>
+    super-agent skills remove <name>
+    super-agent skills path
     super-agent submit "写一段 v2.1 更新说明" --skill release-notes
 
 ## API

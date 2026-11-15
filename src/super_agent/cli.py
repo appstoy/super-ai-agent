@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import time
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -28,6 +29,7 @@ from super_agent.domain.health import HealthStatus
 from super_agent.errors import AgentError
 from super_agent.ingress.schemas import TriggerInput
 from super_agent.ports.model import ChatMessage, MessageRole, ModelGateway, ModelRequest
+from super_agent.skills.installer import install_skill, uninstall_skill
 from super_agent.skills.loader import SkillRegistry
 from super_agent.storage.database import (
     create_engine_for_url,
@@ -54,6 +56,16 @@ def _submit_payload(
     return payload
 
 
+def _skill_library(settings: Settings) -> Path:
+    """The folder installs land in: the first configured skill root."""
+
+    from super_agent.tools.loading import resolve_skill_roots
+
+    root = Path(settings.workspace_root).resolve()
+    roots = resolve_skill_roots(settings, root)
+    return roots[0] if roots else root / "skills"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="super-agent", description="Super AI Agent control CLI")
     parser.add_argument("--version", action="version", version=__version__)
@@ -61,7 +73,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("health", help="print local service health")
     subparsers.add_parser("tools", help="list loaded built-in and user tools")
-    subparsers.add_parser("skills", help="list installed skills (selectable playbooks)")
+    skills_parser = subparsers.add_parser(
+        "skills", help="list, install or remove skills (selectable playbooks)"
+    )
+    skills_sub = skills_parser.add_subparsers(dest="skills_command", required=False)
+    skills_sub.add_parser("list", help="list installed skills (default)")
+    skills_install = skills_sub.add_parser(
+        "install", help="copy a skill from a folder, a git URL or owner/repo"
+    )
+    skills_install.add_argument("source", help="local folder, git URL, or owner/repo")
+    skills_install.add_argument("--ref", default=None, help="branch or tag to clone")
+    skills_install.add_argument(
+        "--force", action="store_true", help="overwrite an existing skill folder"
+    )
+    skills_remove = skills_sub.add_parser("remove", help="remove an installed skill")
+    skills_remove.add_argument("name")
+    skills_sub.add_parser("path", help="print the library folder skills are installed into")
     subparsers.add_parser("model-check", help="call the configured OpenAI-compatible model")
     subparsers.add_parser("magpie-check", help="inspect a local Magpie gateway and model catalog")
     serve = subparsers.add_parser("serve", help="run the health API")
@@ -129,9 +156,47 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "skills":
+        library = _skill_library(settings)
+        action = getattr(args, "skills_command", None)
+        if action == "path":
+            print(library)
+            return 0
+        if action == "install":
+            try:
+                installed = install_skill(
+                    args.source, library, ref=args.ref, force=args.force
+                )
+            except AgentError as exc:
+                raise SystemExit(str(exc)) from exc
+            report_payload = installed.to_dict()
+            # A running server picks the folder up on its next read, so no
+            # restart is needed; claiming otherwise sends people on a pointless
+            # detour. Only a process that was already up would have missed it.
+            report_payload["restart_required"] = False
+            print(json.dumps(report_payload, ensure_ascii=False, sort_keys=True))
+            if installed.installed:
+                print(
+                    "\n已安装。服务会自动识别，刷新页面即可使用。",
+                    file=sys.stderr,
+                )
+            for folder, reason in installed.skipped:
+                print(f"skipped {folder}: {reason}", file=sys.stderr)
+            return 0 if installed.installed else 1
+        if action == "remove":
+            try:
+                removed = uninstall_skill(args.name, library)
+            except AgentError as exc:
+                raise SystemExit(str(exc)) from exc
+            print(json.dumps(
+                {"removed": str(removed), "restart_required": False},
+                ensure_ascii=False, sort_keys=True,
+            ))
+            print("\n已移除。刷新页面即可看到列表变化。", file=sys.stderr)
+            return 0
         _registry, _capabilities, report = build_agent_tools(settings)
         catalogue = {
             "enabled": settings.skills_enabled,
+            "library": str(library),
             "skills": [skill.to_dict() for skill in report.skills.skills],
             "failed": [list(item) for item in report.skills.failed],
         }

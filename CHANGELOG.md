@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- **Skills can be installed, and a running server picks them up.** Previously a
+  skill had to be placed by hand and then required a restart, because the
+  library was scanned once at startup:
+  - `super-agent skills install <folder|git-url|owner/repo>` copies and validates
+    in one step; `skills remove` undoes it; `skills path` says where the library
+    lives. `--ref` pins a branch or tag, `--force` overwrites.
+  - An install validates first: a skill that fails to parse is reported in
+    `skipped` while the rest still install, so one bad folder cannot block a
+    library.
+  - `remove` only deletes folders recorded in `<library>/.installed.json`; a
+    hand-written skill is refused rather than silently deleted.
+  - `LiveSkillLibrary` re-checks folder modification stamps before each read, so
+    a folder added while the server runs appears on the next page refresh — for
+    the picker, the task payload, and the model's `skill.list` / `skill_read`.
+    An unchanged library is not re-parsed.
+  - `skill.list` / `skill.read` are now always registered rather than only when
+    the startup scan found something, which is what made a fresh install
+    invisible to the model until a restart.
+
 - **Typing `/` in the composer now opens the skill list.** The chips were the
   only way to pick a skill, which meant scanning a row below the box. A `/`
   token at the start of the current word opens a menu under the cursor with

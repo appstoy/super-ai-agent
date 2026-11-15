@@ -244,18 +244,24 @@ def test_unknown_skill_name_is_surfaced_to_the_model(tmp_path: Path) -> None:
     assert "ghost" in prompt
 
 
-def test_skill_tools_are_registered_only_when_a_library_exists(tmp_path: Path) -> None:
+def test_skill_tools_exist_even_on_an_empty_library(tmp_path: Path) -> None:
+    """A skill installed while the server runs must be readable right away.
+
+    Registering the tools only when the startup scan found something meant a
+    fresh install stayed invisible to the model until a restart.
+    """
+
     empty = build_agent_tools(_settings(tmp_path), workspace_root=tmp_path)[0]
-    assert "skill.read" not in {spec.name for spec in empty.specs()}
+    names = {spec.name for spec in empty.specs()}
+    assert "skill.read" in names
+    assert "skill.list" in names
 
     library = tmp_path / "lib"
     _skill(library, "alpha", description="first", body="# Alpha")
     populated = build_agent_tools(
         _settings(tmp_path, library), workspace_root=tmp_path
     )[0]
-    names = {spec.name for spec in populated.specs()}
-    assert "skill.read" in names
-    assert "skill.list" in names
+    assert {"skill.read", "skill.list"} <= {spec.name for spec in populated.specs()}
 
 
 def test_skill_read_tool_returns_the_body(tmp_path: Path) -> None:

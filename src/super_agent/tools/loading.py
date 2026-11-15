@@ -24,6 +24,7 @@ from super_agent.config import Settings
 from super_agent.errors import ConfigurationError, ValidationError
 from super_agent.ports.tool import ExecutionContext, Tool, ToolEffect, ToolResult, ToolSpec
 from super_agent.security.policy import ToolPolicy, ToolRisk
+from super_agent.skills.library import LiveSkillLibrary
 from super_agent.skills.loader import (
     SkillLoadReport,
     build_skill_registry,
@@ -488,20 +489,24 @@ def build_agent_tools(
     # still needs a way to discover and read them mid-task: a request can match
     # a skill nobody preselected. Registering these two read-only tools costs
     # nothing when the library is empty and keeps selection optional.
+    skill_roots = resolve_skill_roots(settings, root)
     skills, skill_report = build_skill_registry(
-        resolve_skill_roots(settings, root), enabled=settings.skills_enabled
+        skill_roots, enabled=settings.skills_enabled
     )
     capabilities = set(report.capabilities)
     builtin_names = report.builtin
-    if len(skills) > 0:
-        registry.register(SkillListTool(skills))
-        registry.register(SkillReadTool(skills))
-        capabilities.add("skill.read")
-        # /api/tools must agree with what the model can actually call. Skill
-        # tools are runtime-provided, so append them to the builtin list rather
-        # than re-snapshotting the registry (which would also sweep user tools
-        # into "builtin" and break that field's meaning).
-        builtin_names = (*report.builtin, "skill.list", "skill.read")
+    # The tools stay registered even on an empty library: a skill installed
+    # while the server is running must be readable by the model immediately,
+    # and a LiveSkillLibrary behind them re-scans on access.
+    library = LiveSkillLibrary(skill_roots, enabled=settings.skills_enabled)
+    registry.register(SkillListTool(library))
+    registry.register(SkillReadTool(library))
+    capabilities.add("skill.read")
+    # /api/tools must agree with what the model can actually call. Skill tools
+    # are runtime-provided, so append them to the builtin list rather than
+    # re-snapshotting the registry (which would also sweep user tools into
+    # "builtin" and break that field's meaning).
+    builtin_names = (*report.builtin, "skill.list", "skill.read")
 
     return (
         registry,

@@ -212,16 +212,25 @@ Runnable acceptance evidence (21 checks, no credentials required):
     skills/release-notes/SKILL.md     # 项目自带示例
     skills/html-page/SKILL.md
 
-用法三选一：
+选技能（三选一）：
 
-    # 网页：输入框里打 / 选技能（↑↓ 选，Enter 确认），或点下方胶囊
+    # 网页：输入框里打 / 弹列表，↑↓ 选、Enter 确认；或点下方胶囊
     # CLI：
     super-agent submit "写一段 v2.1 更新说明" --skill release-notes
     # API：
     POST /api/tasks/async  {"message": "...", "skills": ["release-notes"]}
 
-    super-agent skills        # 列出已安装技能
-    GET  /api/skills          # 同上，含加载失败的原因
+装技能：
+
+    super-agent skills install ./my-skills        # 从文件夹
+    super-agent skills install someone/skills     # 从 GitHub 仓库
+    super-agent skills list                       # 看装了什么
+    super-agent skills remove <名字>               # 卸载
+    super-agent skills path                       # 库在哪个目录
+    GET  /api/skills                              # 同上，含加载失败原因
+
+**装完不用重启**：服务每次读取前会检查目录是否有变化，刷新页面就能用——
+选择器、任务 payload、模型的 `skill_list` / `skill_read` 都会立即看到。
 
 没选中的技能只以一行简介出现在提示词里，模型觉得对得上可以自己用
 `skill_read` 打开 —— 所以"用户没选但正好相关"的情况也能处理。

@@ -41,7 +41,7 @@ from super_agent.errors import AgentError
 from super_agent.ingress.schemas import TriggerInput
 from super_agent.policies.speculative_runner import SpeculativeRunner
 from super_agent.ports.model import ChatMessage, MessageRole, ModelGateway, ModelRequest
-from super_agent.skills.loader import SkillRegistry
+from super_agent.skills.library import LiveSkillLibrary
 from super_agent.storage.database import (
     create_engine_for_url,
     create_schema,
@@ -60,7 +60,7 @@ from super_agent.storage.models import (
     WorkerEventRecord,
     WorkerRecord,
 )
-from super_agent.tools.loading import build_agent_tools
+from super_agent.tools.loading import build_agent_tools, resolve_skill_roots
 from super_agent.tools.recall import RecallTool
 from super_agent.tools.registry import ToolRegistry
 from super_agent.tools.workspace import find_task_workspace
@@ -151,9 +151,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     agent_tools, agent_capabilities, tool_load_report = build_agent_tools(
         active_settings, workspace_root=workspace_root
     )
-    # The same registry instance the skill_* tools read from, so what the user
-    # picks and what the model can browse never disagree.
-    skill_registry = SkillRegistry(tool_load_report.skills.skills)
+    # One live view shared by the picker, the model's skill_* tools and the
+    # task payload: installing a folder and refreshing the page is enough, no
+    # restart. The object re-scans only when the library's mtime moves.
+    skill_registry = LiveSkillLibrary(
+        resolve_skill_roots(active_settings, workspace_root),
+        enabled=active_settings.skills_enabled,
+    )
     recall_tool = RecallTool(runtime_factory)
     tool_runner = DurableToolRunner(runtime_factory, agent_tools)
     agent_runner = BackgroundAgentRunner(
@@ -318,12 +322,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         description) is something the user can act on.
         """
 
-        report = tool_load_report.skills
+        skills = skill_registry.all()
         return {
             "enabled": active_settings.skills_enabled,
-            "skills": [skill.to_dict() for skill in report.skills],
-            "failed": [list(item) for item in report.failed],
-            "count": len(report.skills),
+            "library": str(skill_registry.roots[0]) if skill_registry.roots else None,
+            "skills": [skill.to_dict() for skill in skills],
+            "failed": [list(item) for item in skill_registry.failed],
+            "count": len(skills),
         }
 
     @app.get("/api/config")
