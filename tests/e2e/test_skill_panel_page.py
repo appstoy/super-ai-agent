@@ -168,3 +168,33 @@ def test_agents_tab_loads_before_you_open_it() -> None:
     opener = page[page.index("function openSkillPanel"):]
     opener = opener[: opener.index("function closeSkillPanel")]
     assert "loadAgentSkills" in opener
+
+
+def test_import_button_markup_has_no_stray_separator() -> None:
+    """A literal '|' in the generated attribute produced 'claude|' and made
+    every agent import fail with 'unknown agent'."""
+
+    page = _page()
+    block = page[page.index("function agentRowHtml"):]
+    block = block[: block.index("function marketRowHtml")]
+    assert "esc(item.agent) + '|" not in block
+    assert 'esc(item.agent) + \'" data-sp-name="' in block
+
+
+def test_unpicking_repaints_every_picker() -> None:
+    """Cancelling from 本次套用 must clear the panel rows and badge too."""
+
+    page = _page()
+    block = page[page.index("function renderPicked"):]
+    block = block[: block.index("function renderSkills")]
+    assert "renderSkillPanel()" in block
+    assert "renderSlash()" in block
+
+
+def test_toggling_from_the_panel_updates_all_pickers() -> None:
+    page = _page()
+    block = page[page.index("function toggleSkill"):]
+    block = block[: block.index("function slashQuery")]
+    assert "renderSkills()" in block
+    assert "renderSkillPanel()" in block
+    assert "renderSlash()" in block

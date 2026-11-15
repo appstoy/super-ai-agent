@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Fixed the agent import button and the selection sync.** Two user-visible
+  regressions in the panel:
+  - The rendered `data-sp-import` attribute had a stray literal `|` appended
+    to the agent id, so *every* agent import failed with
+    `未知的 agent：claude|`. The attribute is now the plain id.
+  - Removing a skill via the `×` in 本次套用 only repainted the tags, leaving
+    the panel rows still showing 已选 / 取消选用 and the badge unchanged. All
+    three pickers (panel, chips, `/` menu) now repaint together on every
+    change, in both directions.
+
 - **A long skill no longer disappears.** `appstoy-video` has a 36 000-character
   SKILL.md; the 24 000 cap rejected it, and because discovery swallows parse
   failures the skill simply was not in the list — the user's reasonable

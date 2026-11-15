@@ -2094,7 +2094,12 @@ function renderPicked() {
         '" title="移除这个技能" aria-label="移除">×</button></span>';
     }).join("");
   row.querySelectorAll("[data-unpick]").forEach((btn) => {
-    btn.onclick = () => { S.pickedSkills.delete(btn.dataset.unpick); renderSkills(); };
+    btn.onclick = () => {
+      S.pickedSkills.delete(btn.dataset.unpick);
+      renderSkills();
+      renderSkillPanel();
+      renderSlash();
+    };
   });
 }
 
@@ -2131,6 +2136,10 @@ function toggleSkill(name) {
   if (S.pickedSkills.has(name)) S.pickedSkills.delete(name);
   else S.pickedSkills.add(name);
   renderSkills();
+  // All three pickers (panel rows, chips, "/") show the same selection state,
+  // so every change has to repaint them together.
+  renderSkillPanel();
+  renderSlash();
 }
 
 /* ---------- slash menu ---------- */
@@ -2374,7 +2383,7 @@ function agentRowHtml(item) {
     (have
       ? '<button type="button" class="sp-act picked" disabled>已导入</button>'
       : '<button type="button" class="sp-act primary" data-sp-import="' +
-        esc(item.agent) + '|" data-sp-name="' + esc(item.name) + '">导入</button>') +
+        esc(item.agent) + '" data-sp-name="' + esc(item.name) + '">导入</button>') +
   '</div>';
 }
 
@@ -2514,7 +2523,7 @@ function renderSkillPanel() {
 function bindSkillPanelRows() {
   const body = $("sp-body");
   body.querySelectorAll("[data-sp-pick]").forEach((btn) => {
-    btn.onclick = () => { toggleSkill(btn.dataset.spPick); renderSkillPanel(); };
+    btn.onclick = () => toggleSkill(btn.dataset.spPick);
   });
   body.querySelectorAll("[data-sp-remove]").forEach((btn) => {
     btn.onclick = () => removeSkill(btn.dataset.spRemove, btn);
