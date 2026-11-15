@@ -107,7 +107,11 @@ const opened = await cdp.eval([
 ].join("\n"));
 check("clicking the button opens the panel", opened.hidden === false);
 check("installed skills are listed", opened.rows.length === 2, JSON.stringify(opened.rows));
-check("panel has both tabs", opened.tabs.length === 2, JSON.stringify(opened.tabs));
+check("panel has installed / agents / market tabs",
+  opened.tabs.length === 3 && opened.tabs.some(t => t.includes("已安装"))
+    && opened.tabs.some(t => t.includes("agent"))
+    && opened.tabs.some(t => t.includes("市场")),
+  JSON.stringify(opened.tabs));
 check("panel has a search box", opened.hasSearch === true);
 
 // 3. choosing a skill from the panel marks it for this task

@@ -5,9 +5,11 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
+import tempfile
 import time
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager
@@ -41,6 +43,7 @@ from super_agent.errors import AgentError
 from super_agent.ingress.schemas import TriggerInput
 from super_agent.policies.speculative_runner import SpeculativeRunner
 from super_agent.ports.model import ChatMessage, MessageRole, ModelGateway, ModelRequest
+from super_agent.skills.agents import discover_agent_skills
 from super_agent.skills.installer import install_skill, uninstall_skill
 from super_agent.skills.library import LiveSkillLibrary
 from super_agent.skills.market import (
@@ -50,6 +53,7 @@ from super_agent.skills.market import (
     resolve_ref,
     search_market,
 )
+from super_agent.skills.sources import import_from_agent, import_from_path
 from super_agent.storage.database import (
     create_engine_for_url,
     create_schema,
@@ -74,6 +78,9 @@ from super_agent.tools.registry import ToolRegistry
 from super_agent.tools.workspace import find_task_workspace
 from super_agent.watchdog import PersistentRunWatchdog
 from super_agent.watchdog.session import WatchdogSession
+
+# A dropped archive is a convenience, not a bulk transfer channel.
+MAX_UPLOAD_BYTES = 60 * 1024 * 1024
 
 
 class ChatRequest(BaseModel):
@@ -125,6 +132,35 @@ class SkillInstallRequest(BaseModel):
     source: str = Field(min_length=1, max_length=500)
     from_magpie: bool = False
     ref: str | None = Field(default=None, max_length=255)
+    force: bool = False
+
+
+class SkillImportRequest(BaseModel):
+    """Import skills from another agent, a folder path, or an archive path."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: str = Field(min_length=1, max_length=1000)
+    from_agent: bool = False
+    names: list[str] = Field(default_factory=list, max_length=200)
+    force: bool = False
+
+
+class SkillFileItem(BaseModel):
+    """One file from a dropped folder: relative path plus base64 content."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    path: str = Field(min_length=1, max_length=1000)
+    content: str = Field(max_length=32_000_000)
+
+
+class SkillFilesRequest(BaseModel):
+    """A whole folder, sent as files so the server can rebuild the tree."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    files: list[SkillFileItem] = Field(default_factory=list, max_length=4000)
     force: bool = False
 
 
@@ -426,6 +462,144 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except AgentError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"removed": str(removed)}
+
+    # ---- skills that already exist elsewhere on this machine ----------------
+    # Magpie's model: every agent keeps skills/<name>/SKILL.md under its own
+    # config dir, so the same convention lets SAA list them and offer an import.
+
+    @app.get("/api/skills/agents")
+    def list_agent_skills(agent: str | None = None) -> dict[str, object]:
+        """List skills found in other agents' folders on this machine."""
+
+        sources, skills = discover_agent_skills()
+        rows = [
+            item.to_dict()
+            for item in skills
+            if agent is None or agent in [pair[0] for pair in item.agents]
+        ]
+        return {
+            "sources": [source.to_dict() for source in sources],
+            "skills": rows,
+            "count": len(rows),
+            "any_found": any(source.exists for source in sources),
+        }
+
+    @app.post("/api/skills/import")
+    def import_skills(payload: SkillImportRequest) -> dict[str, object]:
+        """Import from another agent, a folder path, or a dropped archive."""
+
+        library = skill_registry.roots[0] if skill_registry.roots else workspace_root
+        try:
+            if payload.from_agent:
+                outcome = import_from_agent(
+                    payload.source,
+                    library,
+                    names=payload.names,
+                    force=payload.force,
+                )
+            else:
+                outcome = import_from_path(
+                    payload.source, library, force=payload.force
+                )
+        except AgentError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        skill_registry.refresh(force=True)
+        return outcome.to_dict()
+
+    @app.post("/api/skills/upload")
+    async def upload_skill_archive(
+        request: Request, filename: str = "upload.zip", force: bool = False
+    ) -> dict[str, object]:
+        """Import a dropped .zip / .tar.gz sent as the raw request body.
+
+        The raw body is deliberate: multipart uploads need python-multipart,
+        and pulling in a new runtime dependency (which also has to be installed
+        for Form/File to even import) is a heavy price for one drag-and-drop
+        box. The browser sends the File object directly.
+        """
+
+        library = skill_registry.roots[0] if skill_registry.roots else workspace_root
+        name = (filename or "upload.zip").replace("\\", "/").split("/")[-1]
+        if not name:
+            raise HTTPException(status_code=400, detail="上传的文件没有名字")
+        suffix = Path(name).suffix.lower()
+        allowed = {".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz"}
+        if suffix not in allowed:
+            raise HTTPException(
+                status_code=400,
+                detail=f"不支持的文件类型 {suffix or '（无扩展名）'}；请上传 .zip 或 .tar.gz",
+            )
+        body = await request.body()
+        if not body:
+            raise HTTPException(status_code=400, detail="上传的文件是空的")
+        if len(body) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"文件超过 {MAX_UPLOAD_BYTES // 1024 // 1024}MB 上限",
+            )
+        with tempfile.TemporaryDirectory(prefix="saa-upload-") as scratch:
+            target = Path(scratch) / name
+            target.write_bytes(body)
+            try:
+                outcome = import_from_path(target, library, force=force)
+            except AgentError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            skill_registry.refresh(force=True)
+            result = outcome.to_dict()
+            result["filename"] = name
+            return result
+
+
+    @app.post("/api/skills/upload-files")
+    def upload_skill_files(payload: SkillFilesRequest) -> dict[str, object]:
+        """Import a dropped folder sent as a list of relative paths + base64 bytes.
+
+        Browsers cannot hand a page a folder path, and zipping client-side means
+        shipping a packer library (or a CDN call that breaks the offline story).
+        Sending the files as data and rebuilding the tree on the server keeps
+        this dependency-free and lets one endpoint handle folders the same way
+        it handles archives.
+        """
+
+        library = skill_registry.roots[0] if skill_registry.roots else workspace_root
+        if not payload.files:
+            raise HTTPException(status_code=400, detail="没有收到任何文件")
+        total = 0
+        decoded: list[tuple[str, bytes]] = []
+        for item in payload.files:
+            try:
+                data = base64.b64decode(item.content, validate=False)
+            except Exception as exc:  # noqa: BLE001 - a bad payload is a 400
+                raise HTTPException(
+                    status_code=400, detail=f"文件内容无法解码：{item.path}"
+                ) from exc
+            total += len(data)
+            if total > MAX_UPLOAD_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"总大小超过 {MAX_UPLOAD_BYTES // 1024 // 1024}MB 上限",
+                )
+            decoded.append((item.path, data))
+        with tempfile.TemporaryDirectory(prefix="saa-upload-") as scratch:
+            root = Path(scratch) / "dropped"
+            root.mkdir()
+            base = root.resolve()
+            for rel, data in decoded:
+                clean = rel.replace("\\", "/").lstrip("/")
+                target = (root / clean).resolve()
+                # A dropped entry named ../../x must not write outside the temp tree.
+                if target != base and base not in target.parents:
+                    raise HTTPException(status_code=400, detail=f"越界路径：{rel}")
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(data)
+            try:
+                outcome = import_from_path(root, library, force=payload.force)
+            except AgentError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            skill_registry.refresh(force=True)
+            result = outcome.to_dict()
+            result["files"] = len(decoded)
+            return result
 
     @app.get("/api/config")
     def config_summary() -> dict[str, object]:

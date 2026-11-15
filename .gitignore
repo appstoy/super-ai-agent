@@ -21,3 +21,7 @@ build/
 # Each task writes into its own subfolder here, so this grows with use
 # and must never be committed.
 项目缓存文件/
+
+# Ledger of skills installed via the CLI/UI. It records local absolute paths,
+# so it is machine state, not source.
+skills/.installed.json

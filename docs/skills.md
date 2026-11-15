@@ -75,6 +75,73 @@ There are two paths, and both matter:
 An unknown name in the selection is reported to the model rather than dropped —
 silently running without the playbook the user chose is the worse failure.
 
+## Where the panel gets skills from
+
+The 技能 panel has three tabs, because there are three different places a skill
+can come from:
+
+### 已安装 — what is in SAA's own library
+
+Every skill on disk with title, description and tags, plus 选用 / 移除 per row
+and a search box. Removing only ever deletes a folder the installer owns.
+
+### 其他 agent — what the other agents on this machine already have
+
+Magpie's model, and the one every agent tool follows: a `skills/` folder under
+its own config dir, one sub-folder per skill with a `SKILL.md`.
+
+    ~/.claude/skills/<name>/SKILL.md
+    ~/.codex/skills/<name>/SKILL.md
+    ~/.gemini/skills/<name>/SKILL.md
+    ~/.agents/skills/<name>/SKILL.md      (the shared convention)
+    ~/.cursor/skills, ~/.opencode/skills, ~/.vscode/skills
+    ~/.config/magpie/library/skills       (Magpie's own library)
+
+SAA scans these, and the sub-filter pills let you narrow to one agent. Two
+details that matter in practice and are both handled:
+
+* **The same skill usually appears under several agents.** Agents are given a
+  copy of the same folder, so discovery fingerprints the content and shows one
+  row naming every agent that has it — `在 Claude Code、Codex、Magpie 库`.
+* **A folder is not a skill.** `.gemini/skills` can hold folders with only
+  assets. Presence of `SKILL.md` is checked, so those never show up as
+  importable.
+
+Importing copies; the other agent's folder is untouched. Bulk `全部导入` takes
+everything missing from the current filter.
+
+### Skill 市场 — Magpie's catalogue
+
+Search 735+ skills and install with one click. See the section below.
+
+## Drop a folder or an archive
+
+Drag a **folder** or a **`.zip` / `.tar.gz`** anywhere onto the page (or use
+📁 选择文件, and Shift-click to pick a folder). SAA reads it, finds every
+`SKILL.md`, validates each one and imports what it can:
+
+* a wrapped archive (`my-skill.zip` → `my-skill/SKILL.md`) installs under the
+  skill's own declared name, not the wrapper's
+* a folder holding several skills imports all of them
+* a folder with no `SKILL.md` is refused with that reason, not silently ignored
+* one broken skill inside an otherwise good import is reported per-skill; the
+  rest still land
+* archives are unpacked in a temp directory first, and entries that escape it
+  (`../../x`) or contain links are rejected outright
+
+Folders cannot be zipped in the browser without shipping a packer library, so
+the page reads the files and sends them; the server rebuilds the tree. That
+keeps the whole feature working offline with no extra dependency, and both
+inputs end up in the same "find SKILL.md, validate, copy" path.
+
+## 链接 / 目录 — paste a path or a URL
+
+🔗 链接 / 目录 accepts any of:
+
+    C:skillsmy-skill                 a folder on this machine
+    someone/skills/my-skill            a Magpie catalogue ref
+    https://github.com/x/y.git         a repository
+
 ## Installing a skill
 
 Three ways in, all landing in the same library folder:

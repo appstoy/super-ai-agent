@@ -214,8 +214,12 @@ Runnable acceptance evidence (21 checks, no credentials required):
 
 选技能：
 
-    # 网页：点输入框里的「✦ 技能」按钮 —— 已安装 / Magpie 市场 两个标签页，
-    #      能搜、能选、能装、能删。也可以打 / 弹列表，↑↓ 选、Enter 确认。
+    # 网页：点输入框里的「✦ 技能」按钮，三个标签页：
+    #      已安装        本机 SAA 库里的，能搜 / 选用 / 移除
+    #      其他 agent    扫 Claude Code / Codex / Gemini / .agents 等目录，一键导入
+    #      Skill 市场    搜 Magpie 的 735+ 技能
+    #      也能把文件夹或 .zip/.tar.gz 直接拖到页面上，自动识别 SKILL.md。
+    #      输入框打 / 也能弹列表，↑↓ 选、Enter 确认。
     # CLI：
     super-agent submit "写一段 v2.1 更新说明" --skill release-notes
     # API：

@@ -110,3 +110,61 @@ def test_page_still_has_no_escaped_chinese() -> None:
     page = _page()
     assert "\\u4f60" not in page.lower()
     assert "\u4F60\u60F3\u8BA9\u5B83\u505A\u4EC0\u4E48" in page
+
+
+def test_panel_has_three_tabs_including_other_agents() -> None:
+    """The agent tab is where most users will get their first skill from."""
+
+    page = _page()
+    assert 'data-sp-tab="installed"' in page
+    assert 'data-sp-tab="agents"' in page
+    assert 'data-sp-tab="market"' in page
+
+
+def test_panel_has_a_drop_zone_and_file_pickers() -> None:
+    page = _page()
+    assert 'id="sp-drop"' in page
+    assert 'id="sp-file"' in page          # archive picker
+    assert 'id="sp-dir"' in page           # folder picker
+    assert "webkitdirectory" in page       # lets the picker choose a folder
+    assert 'id="sp-add-link"' in page
+
+
+def test_page_wide_drop_overlay_exists() -> None:
+    """Dragging anywhere should be accepted, like a file manager."""
+
+    page = _page()
+    assert 'id="page-drop"' in page
+    assert 'document.addEventListener("drop"' in page
+    # dragenter/dragover are registered in one loop to show the overlay.
+    assert '"dragenter", "dragover"' in page
+    assert "setDropActive(true)" in page
+
+
+def test_folder_drop_does_not_need_a_client_zip_library() -> None:
+    """Packing in the browser would need JSZip or a CDN, breaking offline use."""
+
+    page = _page()
+    assert "JSZip" not in page
+    assert "/api/skills/upload-files" in page
+
+
+def test_agent_sub_filter_pills_are_rendered() -> None:
+    page = _page()
+    assert "data-agent-filter" in page
+    assert "agentPillsHtml" in page
+
+
+def test_import_goes_through_the_agent_endpoint() -> None:
+    page = _page()
+    assert '"/api/skills/import"' in page
+    assert "from_agent: true" in page
+
+
+def test_agents_tab_loads_before_you_open_it() -> None:
+    """The tab badge is the hint that importing is worth doing."""
+
+    page = _page()
+    opener = page[page.index("function openSkillPanel"):]
+    opener = opener[: opener.index("function closeSkillPanel")]
+    assert "loadAgentSkills" in opener

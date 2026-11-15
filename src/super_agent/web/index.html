@@ -240,6 +240,69 @@ button,input,select,textarea{font:inherit;color:inherit}
   font-family:inherit;outline:none;
 }
 .sp-search input:focus{border-color:var(--accent)}
+
+.sp-toolbar{
+  display:flex;align-items:center;gap:8px;padding:9px 13px;
+  border-bottom:1px solid var(--line2);flex-wrap:wrap;
+}
+.sp-toolbar .sp-search{flex:1;min-width:130px}
+.sp-add{
+  border:1px solid var(--line);background:var(--panel);color:var(--ink2);
+  border-radius:9px;padding:6px 10px;font-size:12px;cursor:pointer;
+  font-family:inherit;white-space:nowrap;transition:.14s;
+}
+.sp-add:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+
+/* sub-filter under the agents tab */
+.sp-sub{
+  display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+  padding:9px 13px 4px;border-bottom:1px solid var(--line2);
+}
+.sp-sub[hidden]{display:none}
+.sp-pill{
+  border:1px solid var(--line);background:var(--panel);color:var(--ink2);
+  border-radius:99px;padding:4px 10px;font-size:11.5px;cursor:pointer;
+  font-family:inherit;white-space:nowrap;transition:.14s;
+}
+.sp-pill.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:550}
+.sp-pill .n{opacity:.65;margin-left:3px}
+.sp-pill[disabled]{opacity:.45;cursor:default}
+.sp-where{
+  font-size:10.5px;color:var(--ink3);margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+
+/* drop zone */
+.sp-drop{
+  margin:8px;padding:20px 16px;border:1.5px dashed var(--line);
+  border-radius:12px;text-align:center;color:var(--ink3);font-size:12.5px;
+  transition:.16s;background:var(--bg);
+}
+.sp-drop .sp-drop-inner .arrow{font-size:17px;margin-bottom:4px;opacity:.6}
+.sp-drop .hint{font-size:11px;margin-top:4px;opacity:.75}
+.sp-drop.active{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.sp-drop.active .hint{color:var(--accent);opacity:.9}
+
+/* whole-page drop overlay */
+.page-drop{
+  position:fixed;inset:0;z-index:120;display:none;
+  align-items:center;justify-content:center;
+  background:rgba(0,113,227,.10);backdrop-filter:blur(2px);
+}
+.page-drop.on{display:flex}
+.page-drop .box{
+  background:var(--panel);border:2px dashed var(--accent);border-radius:20px;
+  padding:34px 46px;text-align:center;color:var(--accent);
+  box-shadow:0 18px 60px rgba(0,0,0,.25);
+}
+.page-drop .box .big{font-size:30px;margin-bottom:8px}
+.page-drop .box .t{font-size:15px;font-weight:600}
+.page-drop .box .s{font-size:12.5px;color:var(--ink2);margin-top:6px}
+
+.sp-import-note{
+  margin:6px;padding:9px 12px;border-radius:10px;font-size:12px;
+  background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent);
+}
 .sp-close{
   border:0;background:none;color:var(--ink3);cursor:pointer;font-size:15px;
   padding:4px 6px;border-radius:8px;flex:none;
@@ -763,15 +826,43 @@ button,input,select,textarea{font:inherit;color:inherit}
           <button class="sp-tab on" data-sp-tab="installed" type="button">
             已安装 <span class="n" id="sp-installed-n">0</span>
           </button>
-          <button class="sp-tab" data-sp-tab="market" type="button">Magpie 市场</button>
-        </div>
-        <div class="sp-search">
-          <input type="text" id="sp-q" placeholder="搜索技能名或用途…" autocomplete="off" />
+          <button class="sp-tab" data-sp-tab="agents" type="button">
+            其他 agent <span class="n" id="sp-agents-n">0</span>
+          </button>
+          <button class="sp-tab" data-sp-tab="market" type="button">Skill 市场</button>
         </div>
         <button class="sp-close" id="sp-close" type="button" title="关闭">✕</button>
       </div>
+
+      <div class="sp-toolbar">
+        <div class="sp-search">
+          <input type="text" id="sp-q" placeholder="搜索技能名或用途…" autocomplete="off" />
+        </div>
+        <button class="sp-add" id="sp-add-link" type="button" title="从目录路径或 git 链接安装">
+          🔗 链接 / 目录
+        </button>
+        <button class="sp-add" id="sp-add-file" type="button" title="选择压缩包或文件夹">
+          📁 选择文件
+        </button>
+      </div>
+
+      <div class="sp-sub" id="sp-sub" hidden></div>
+
       <div class="sp-body" id="sp-body"></div>
+
+      <div class="sp-drop" id="sp-drop">
+        <div class="sp-drop-inner">
+          <div class="arrow">↓</div>
+          <div>把<strong>文件夹</strong>或<strong>压缩包</strong>（.zip / .tar.gz）拖到这里</div>
+          <div class="hint">也可以直接拖到页面任何位置</div>
+        </div>
+      </div>
+
       <div class="sp-foot" id="sp-foot"></div>
+
+      <input type="file" id="sp-file" multiple hidden
+             accept=".zip,.tar,.gz,.tgz,.bz2,.xz" />
+      <input type="file" id="sp-dir" webkitdirectory directory multiple hidden />
     </section>
     <div class="skills-bar" id="skills-bar" hidden>
       <span class="lead">用技能：</span>
@@ -823,6 +914,13 @@ button,input,select,textarea{font:inherit;color:inherit}
   <pre id="vtext" style="display:none"></pre>
 </dialog>
 
+<div class="page-drop" id="page-drop">
+  <div class="box">
+    <div class="big">📥</div>
+    <div class="t">松手就导入</div>
+    <div class="s">支持文件夹和 .zip / .tar.gz 压缩包，自动识别里面的 SKILL.md</div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -848,6 +946,12 @@ const S = {
   spTab: "installed",
   spTimer: null,
   spError: null,
+  agentSources: [],
+  agentSkills: [],
+  agentFilter: "all",
+  agentLoading: false,
+  _agentWait: null,
+  importing: false,
   expanded: {},
   foldKey: "default",
   seq: 0,
@@ -1800,14 +1904,17 @@ function autoGrow() {
   el.style.height = Math.min(el.scrollHeight, 190) + "px";
 }
 
+bindSkillPanelTools();
 $("skill-btn").onclick = toggleSkillPanel;
 $("sp-close").onclick = closeSkillPanel;
 document.querySelectorAll(".sp-tab").forEach((tab) => {
   tab.onclick = () => {
     S.spTab = tab.dataset.spTab;
+    S.spError = null;
     $("sp-q").value = "";
-    if (S.spTab === "market" && !S.marketRows.length) runPanelMarketSearch("");
-    else renderSkillPanel();
+    if (S.spTab === "market" && !S.marketRows.length) { runPanelMarketSearch(""); return; }
+    if (S.spTab === "agents" && !S.agentSources.length) { loadAgentSkills(true); return; }
+    renderSkillPanel();
   };
 });
 $("sp-q").addEventListener("input", () => {
@@ -2216,6 +2323,10 @@ function openSkillPanel(tab) {
   if (tab) S.spTab = tab;
   $("skill-panel").hidden = false;
   renderSkillPanel();
+  // Fetch the agent list even when that tab is not open: the count on the tab
+  // is what tells the user there is something worth importing.
+  if (!S.agentSources.length && !S.agentLoading) loadAgentSkills(true);
+  if (S.spTab === "market" && !S.marketRows.length) runPanelMarketSearch("");
   const q = $("sp-q");
   if (q && window.innerWidth > 560) q.focus();
 }
@@ -2250,6 +2361,23 @@ function skillRowHtml(skill) {
   '</div>';
 }
 
+function agentRowHtml(item) {
+  const have = S.skills.some((s) => s.name === item.name);
+  const where = (item.agents || []).map((a) => a[1]).join("、");
+  return '<div class="sp-row">' +
+    '<div class="main">' +
+      '<div class="nm">' + esc(item.title || item.name) +
+        (item.linked ? '<span class="sp-official">链接</span>' : "") + '</div>' +
+      '<div class="ds">' + esc(item.description || "（无简介）") + '</div>' +
+      '<div class="sp-where" title="' + esc(item.path) + '">在 ' + esc(where) + '</div>' +
+    '</div>' +
+    (have
+      ? '<button type="button" class="sp-act picked" disabled>已导入</button>'
+      : '<button type="button" class="sp-act primary" data-sp-import="' +
+        esc(item.agent) + '|" data-sp-name="' + esc(item.name) + '">导入</button>') +
+  '</div>';
+}
+
 function marketRowHtml(m) {
   const have = S.skills.some((s) => s.name === m.skill_id);
   return '<div class="sp-row">' +
@@ -2266,23 +2394,50 @@ function marketRowHtml(m) {
   '</div>';
 }
 
+function agentPillsHtml() {
+  const total = S.agentSkills.length;
+  let html = '<button type="button" class="sp-pill' + (S.agentFilter === "all" ? " on" : "") +
+    '" data-agent-filter="all">全部 <span class="n">' + total + '</span></button>';
+  S.agentSources.forEach((src) => {
+    const disabled = !src.exists || !src.count;
+    html += '<button type="button" class="sp-pill' +
+      (S.agentFilter === src.id ? " on" : "") + '"' +
+      (disabled ? " disabled" : "") +
+      ' data-agent-filter="' + esc(src.id) + '" title="' + esc(src.path) + '">' +
+      esc(src.label) + ' <span class="n">' + src.count + '</span></button>';
+  });
+  return html;
+}
+
 function renderSkillPanel() {
   const body = $("sp-body");
   const foot = $("sp-foot");
-  const error = S.spError
-    ? '<div class="sp-error">' +
-        '<div class="msg">' + esc(S.spError) + '</div>' +
-        '<button type="button" class="sp-act" id="sp-error-close">知道了</button>' +
-      '</div>'
-    : "";
+  const sub = $("sp-sub");
   const raw = $("sp-q").value || "";
   const q = raw.trim().toLowerCase();
   const installedN = $("sp-installed-n");
   if (installedN) installedN.textContent = S.skills.length;
+  const agentsN = $("sp-agents-n");
+  if (agentsN) agentsN.textContent = S.agentSkills.length;
 
   document.querySelectorAll(".sp-tab").forEach((tab) => {
     tab.classList.toggle("on", tab.dataset.spTab === S.spTab);
   });
+
+  const error = S.spError
+    ? '<div class="sp-error"><div class="msg">' + esc(S.spError) + '</div>' +
+      '<button type="button" class="sp-act" id="sp-error-close">知道了</button></div>'
+    : "";
+
+  // The agent sub-filter only belongs on its own tab.
+  if (S.spTab === "agents") {
+    if (!S.agentSources.length && !S.agentLoading) loadAgentSkills();
+    sub.hidden = false;
+    sub.innerHTML = agentPillsHtml();
+  } else {
+    sub.hidden = true;
+    sub.innerHTML = "";
+  }
 
   if (S.spTab === "installed") {
     const rows = S.skills.filter((s) => {
@@ -2294,7 +2449,7 @@ function renderSkillPanel() {
     if (!rows.length) {
       body.innerHTML = error + '<div class="sp-empty">' +
         (q ? '没有匹配「' + esc(raw) + '」的技能'
-           : '还没有安装任何技能。<br>去「Magpie 市场」看看，或把文件夹放进 <code>skills/</code>。') +
+           : '还没有技能。<br>去「其他 agent」导入现成的，或把文件夹/压缩包拖到下面。') +
         '</div>';
     } else {
       body.innerHTML = error + rows.map(skillRowHtml).join("");
@@ -2303,13 +2458,36 @@ function renderSkillPanel() {
       '<span class="spacer"></span>' +
       (S.pickedSkills.size ? '<button type="button" class="sp-act" id="sp-clear">清空已选</button>' : "") +
       '<span>也可在输入框打 <code>/</code></span>';
+  } else if (S.spTab === "agents") {
+    if (S.agentLoading) {
+      body.innerHTML = error + '<div class="sp-empty">正在扫描本机其他 agent 的技能…</div>';
+    } else {
+      const rows = S.agentSkills.filter((item) => {
+        if (S.agentFilter !== "all" && !(item.agents || []).some((a) => a[0] === S.agentFilter)) return false;
+        if (!q) return true;
+        const hay = (item.name + " " + (item.title || "") + " " + (item.description || "")).toLowerCase();
+        return hay.includes(q);
+      });
+      if (!S.agentSources.some((s) => s.exists && s.count)) {
+        body.innerHTML = error + '<div class="sp-empty">本机没有找到其他 agent 的技能目录。<br>' +
+          '<span style="font-size:11.5px">会扫描 ~/.claude/skills、~/.codex/skills、~/.gemini/skills、~/.agents/skills 等</span></div>';
+      } else if (!rows.length) {
+        body.innerHTML = error + '<div class="sp-empty">' +
+          (q ? '没有匹配「' + esc(raw) + '」的技能' : "这个 agent 目录里没有技能") + '</div>';
+      } else {
+        body.innerHTML = error + rows.map(agentRowHtml).join("");
+      }
+    }
+    foot.innerHTML = '<span>导入是复制一份，不改动原来的 agent 目录</span>' +
+      '<span class="spacer"></span>' +
+      '<button type="button" class="sp-act" id="sp-import-all">全部导入</button>';
   } else {
     if (S.marketLoading) {
-      body.innerHTML = error + '<div class="sp-empty">正在搜索 Magpie 技能市场…</div>';
+      body.innerHTML = error + '<div class="sp-empty">正在搜索 Skill 市场…</div>';
     } else if (!S.marketRows.length) {
       body.innerHTML = error + '<div class="sp-empty">' +
         (q ? '市场里没有匹配「' + esc(raw) + '」的技能'
-           : '输入关键词搜 Magpie 技能市场<br><span style="font-size:11.5px">' +
+           : '输入关键词搜 Skill 市场<br><span style="font-size:11.5px">' +
              (S.marketTotal ? S.marketTotal + ' 个技能可安装' : '需要本机已安装 Magpie') +
              '</span>') +
         '</div>';
@@ -2327,10 +2505,7 @@ function renderSkillPanel() {
 function bindSkillPanelRows() {
   const body = $("sp-body");
   body.querySelectorAll("[data-sp-pick]").forEach((btn) => {
-    btn.onclick = () => {
-      toggleSkill(btn.dataset.spPick);
-      renderSkillPanel();
-    };
+    btn.onclick = () => { toggleSkill(btn.dataset.spPick); renderSkillPanel(); };
   });
   body.querySelectorAll("[data-sp-remove]").forEach((btn) => {
     btn.onclick = () => removeSkill(btn.dataset.spRemove, btn);
@@ -2342,10 +2517,36 @@ function bindSkillPanelRows() {
       installFromMarket(btn.dataset.spInstall, btn).then(() => renderSkillPanel());
     };
   });
-  const errBtn = document.getElementById("sp-error-close");
-  if (errBtn) {
-    errBtn.onclick = () => { S.spError = null; renderSkillPanel(); };
+  body.querySelectorAll("[data-sp-import]").forEach((btn) => {
+    btn.onclick = () => importFromAgent(btn.dataset.spImport, [btn.dataset.spName], btn);
+  });
+
+  document.querySelectorAll("[data-agent-filter]").forEach((pill) => {
+    pill.onclick = () => {
+      S.agentFilter = pill.dataset.agentFilter;
+      renderSkillPanel();
+    };
+  });
+
+  const importAll = document.getElementById("sp-import-all");
+  if (importAll) {
+    importAll.onclick = () => {
+      const missing = S.agentSkills.filter(
+        (item) => !S.skills.some((s) => s.name === item.name)
+          && (S.agentFilter === "all" || (item.agents || []).some((a) => a[0] === S.agentFilter))
+      );
+      if (!missing.length) { toast("没有需要导入的技能"); return; }
+      const byAgent = {};
+      missing.forEach((item) => {
+        (byAgent[item.agent] = byAgent[item.agent] || []).push(item.name);
+      });
+      Promise.all(Object.entries(byAgent).map(([agent, names]) => importFromAgent(agent, names)))
+        .then(() => renderSkillPanel());
+    };
   }
+
+  const errBtn = document.getElementById("sp-error-close");
+  if (errBtn) errBtn.onclick = () => { S.spError = null; renderSkillPanel(); };
   const clear = document.getElementById("sp-clear");
   if (clear) {
     clear.onclick = () => {
@@ -2355,6 +2556,57 @@ function bindSkillPanelRows() {
       renderSlash();
     };
   }
+}
+
+async function loadAgentSkills(force) {
+  // A prefetch may still be in flight; wait for it instead of returning early,
+  // or the tab that asked would render empty forever.
+  if (S._agentWait) {
+    await S._agentWait;
+    return;
+  }
+  if (!force && S.agentSources.length) return;
+  S.agentLoading = true;
+  S._agentWait = new Promise((done) => { S._agentDone = done; });
+  try {
+    const d = await api("/api/skills/agents");
+    S.agentSources = d.sources || [];
+    S.agentSkills = d.skills || [];
+  } catch (e) {
+    S.agentSources = [];
+    S.agentSkills = [];
+    S.spError = "读取其他 agent 的技能失败：" + e.message;
+  } finally {
+    S.agentLoading = false;
+    S._agentWait = null;
+    if (S._agentDone) { S._agentDone(); S._agentDone = null; }
+    if (!$("skill-panel").hidden) renderSkillPanel();
+  }
+}
+
+async function importFromAgent(agentId, names, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = "导入中…"; }
+  try {
+    const d = await api("/api/skills/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: agentId, from_agent: true, names: names || [] }),
+    });
+    await loadSkills();
+    await loadAgentSkills(true);
+    const got = d.imported || [];
+    if (got.length) {
+      toast("导入了 " + got.length + " 个技能：" + got.slice(0, 3).join("、") + (got.length > 3 ? "…" : ""));
+      got.forEach((n) => S.pickedSkills.add(n));
+      renderSkills();
+    }
+    if (d.skipped && d.skipped.length) {
+      S.spError = d.skipped.map((x) => x[0] + "：" + x[1]).join("；");
+    }
+  } catch (e) {
+    S.spError = "导入失败：" + e.message;
+  }
+  renderSkillPanel();
 }
 
 async function removeSkill(name, btn) {
@@ -2394,6 +2646,356 @@ async function runPanelMarketSearch(q) {
     if (!$("skill-panel").hidden) renderSkillPanel();
   }
 }
+/* ---------- 拖放 / 选择文件 / 手动加链接 ---------- */
+// 支持拖文件夹和压缩包。文件夹在浏览器里没有路径，所以读取里面的所有文件，
+// 在前端重新组装成一个 zip（只保留含 SKILL.md 的那一层目录），再交给后端解析。
+// 这样后端只需要处理一种输入，前端也不要求用户先自己压缩。
+
+function isArchiveName(name) {
+  const n = (name || "").toLowerCase();
+  return [".zip", ".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tar.xz"]
+    .some((suffix) => n.endsWith(suffix));
+}
+
+function bytesOf(n) {
+  if (n >= 1048576) return (n / 1048576).toFixed(1) + " MB";
+  return Math.max(1, Math.round(n / 1024)) + " KB";
+}
+
+function setDropActive(on) {
+  const overlay = $("page-drop");
+  if (overlay) overlay.classList.toggle("on", on);
+  const zone = $("sp-drop");
+  if (zone) zone.classList.toggle("active", on);
+}
+
+async function handleDropped(dt) {
+  const items = dt.items ? [...dt.items] : [];
+  const files = dt.files ? [...dt.files] : [];
+  let folders = 0;
+  const archiveFiles = [];
+  for (const file of files) {
+    if (isArchiveName(file.name)) archiveFiles.push(file);
+  }
+  // webkitGetAsEntry 才能拿到目录结构；旧浏览器退回 files。
+  const entries = [];
+  for (const item of items) {
+    const entry = item.webkitGetAsEntry && item.webkitGetAsEntry();
+    if (!entry) continue;
+    if (entry.isDirectory) { entries.push(entry); folders += 1; }
+  }
+
+  if (!folders && !archiveFiles.length) {
+    toast("没有识别到文件夹或压缩包");
+    return;
+  }
+
+  for (const entry of entries) {
+    await importFolderEntry(entry);
+  }
+  for (const file of archiveFiles) {
+    await uploadArchive(file);
+  }
+  await loadSkills();
+  renderSkillPanel();
+}
+
+function readAllEntries(dirEntry) {
+  return new Promise((resolve, reject) => {
+    const reader = dirEntry.createReader();
+    const all = [];
+    const step = () => {
+      reader.readEntries((batch) => {
+        if (!batch.length) { resolve(all); return; }
+        all.push(...batch);
+        step();
+      }, reject);
+    };
+    step();
+  });
+}
+
+async function walkEntry(entry, prefix, out) {
+  if (entry.isFile) {
+    const file = await new Promise((res, rej) => entry.file(res, rej));
+    if (file.name.startsWith(".")) return;
+    out.push({ path: prefix + file.name, file });
+    return;
+  }
+  if (!entry.isDirectory) return;
+  if (entry.name === "__MACOSX" || entry.name === "node_modules" ||
+      entry.name === ".git" || entry.name === "__pycache__") return;
+  const children = await readAllEntries(entry);
+  for (const child of children) {
+    await walkEntry(child, prefix + entry.name + "/", out);
+  }
+}
+
+async function importFolderEntry(entry) {
+  toast("正在读取文件夹 " + entry.name + " …");
+  const out = [];
+  try {
+    await walkEntry(entry, "", out);
+  } catch (e) {
+    S.spError = "读取文件夹失败：" + e.message;
+    renderSkillPanel();
+    return;
+  }
+  const skillFiles = out.filter((f) => f.path.endsWith("SKILL.md"));
+  if (!skillFiles.length) {
+    S.spError = "「" + entry.name + "」里没有找到 SKILL.md，无法识别为技能。";
+    toast("没有找到 SKILL.md");
+    renderSkillPanel();
+    return;
+  }
+  const total = out.reduce((sum, f) => sum + f.file.size, 0);
+  if (total > 60 * 1024 * 1024) {
+    S.spError = "文件夹太大（" + bytesOf(total) + "），超过 60 MB 上限。";
+    renderSkillPanel();
+    return;
+  }
+  // 只保留含 SKILL.md 的目录层级，其余（文档、截图、node_modules）不带。
+  const roots = skillFiles.map((f) => f.path.slice(0, f.path.length - "SKILL.md".length));
+  const keep = out.filter((f) => roots.some((r) => f.path.startsWith(r)));
+  await sendFolder(keep, entry.name);
+}
+
+// 文件夹打包交给后端：前端只把文件读成 base64 发过去，服务端重建目录树。
+// 这样不依赖任何打包库（断网也能用），也不用为一种输入写两条解析路径。
+const TEXT_EXT = [
+  ".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".csv",
+  ".py", ".js", ".ts", ".sh", ".ps1", ".bat", ".html", ".css", ".xml", ".svg",
+];
+
+function readAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : "");
+    };
+    reader.onerror = () => reject(reader.error || new Error("读取失败"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function sendFolder(entries, label) {
+  if (S.importing) return;
+  if (!entries.length) {
+    S.spError = "「" + label + "」里没有可导入的文件。";
+    renderSkillPanel();
+    return;
+  }
+  // 只发文本类文件：技能是说明文档，二进制资源既没必要也容易超限。
+  const usable = entries.filter((f) => {
+    const n = f.path.toLowerCase();
+    return TEXT_EXT.some((ext) => n.endsWith(ext)) || n.endsWith("skill.md");
+  });
+  if (!usable.some((f) => f.path.toLowerCase().endsWith("skill.md"))) {
+    S.spError = "「" + label + "」里没有 SKILL.md，无法识别为技能。";
+    toast("没有找到 SKILL.md");
+    renderSkillPanel();
+    return;
+  }
+  const skippedBinary = entries.length - usable.length;
+  S.importing = true;
+  toast("正在导入文件夹 " + label + " …");
+  try {
+    const payload = [];
+    let bytes = 0;
+    for (const f of usable) {
+      if (f.file.size > 8 * 1024 * 1024) continue;
+      bytes += f.file.size;
+      if (bytes > 60 * 1024 * 1024) {
+        throw new Error("文件夹超过 60 MB 上限");
+      }
+      payload.push({ path: f.path, content: await readAsBase64(f.file) });
+    }
+    const d = await api("/api/skills/upload-files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ files: payload }),
+    });
+    const got = d.imported || [];
+    if (got.length) {
+      toast("导入了 " + got.length + " 个技能：" + got.slice(0, 3).join("、") +
+        (got.length > 3 ? "…" : ""));
+      got.forEach((n) => S.pickedSkills.add(n));
+      S.spError = null;
+      S.spTab = "installed";
+    } else {
+      S.spError = "「" + label + "」没有导入任何技能" +
+        (d.skipped && d.skipped.length ? "（" + d.skipped.length + " 个被跳过）" : "");
+    }
+    if (d.skipped && d.skipped.length) {
+      S.spError = d.skipped.map((x) => x[0] + "：" + x[1]).join("；");
+    } else if (skippedBinary > 0 && got.length) {
+      toast("已跳过 " + skippedBinary + " 个非文本文件");
+    }
+    await loadSkills();
+  } catch (e) {
+    S.spError = "导入文件夹失败：" + e.message;
+    toast("导入失败：" + e.message);
+  } finally {
+    S.importing = false;
+    renderSkillPanel();
+  }
+}
+async function uploadArchive(file) {
+  if (file.size > 60 * 1024 * 1024) {
+    S.spError = "「" + file.name + "」有 " + bytesOf(file.size) + "，超过 60 MB 上限。";
+    renderSkillPanel();
+    return;
+  }
+  toast("正在导入 " + file.name + " …");
+  await sendArchive(file, file.name);
+}
+
+async function sendArchive(blob, filename) {
+  if (S.importing) return;
+  S.importing = true;
+  try {
+    const res = await fetch("/api/skills/upload?filename=" + encodeURIComponent(filename), {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: blob,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || ("HTTP " + res.status));
+    const got = data.imported || [];
+    if (got.length) {
+      toast("导入了 " + got.length + " 个技能：" + got.slice(0, 3).join("、") + (got.length > 3 ? "…" : ""));
+      got.forEach((n) => S.pickedSkills.add(n));
+      S.spError = null;
+    } else {
+      S.spError = "「" + filename + "」里没有导入任何技能" +
+        (data.skipped && data.skipped.length ? "（" + data.skipped.length + " 个被跳过）" : "");
+    }
+    if (data.skipped && data.skipped.length) {
+      S.spError = data.skipped.map((x) => x[0] + "：" + x[1]).join("；");
+    }
+    S.spTab = "installed";
+    await loadSkills();
+  } catch (e) {
+    S.spError = "导入失败：" + e.message;
+    toast("导入失败：" + e.message);
+  } finally {
+    S.importing = false;
+    renderSkillPanel();
+  }
+}
+
+async function addByLink() {
+  const value = prompt("输入技能目录路径、git 链接，或 owner/repo：\n\n" +
+    "例：C:\\skills\\my-skill\n例：someone/skills/my-skill");
+  if (!value || !value.trim()) return;
+  const text = value.trim();
+  S.spError = null;
+  toast("正在安装 " + text + " …");
+  try {
+    // 有斜杠且像 owner/repo 或 URL 时按市场/仓库装，否则按本地目录导入。
+    const looksRemote = /^(https?:|git@|ssh:)/.test(text) ||
+      (/^[\w.-]+\/[\w.-]+/.test(text) && !/^[A-Za-z]:[\\/]/.test(text) && !text.startsWith("/"));
+    let d;
+    if (looksRemote) {
+      const parts = text.split("/");
+      const isMarketRef = parts.length >= 3 && !/^https?:|^git@/.test(text);
+      d = await api("/api/skills/install", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: text,
+          from_magpie: isMarketRef,
+        }),
+      });
+    } else {
+      d = await api("/api/skills/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: text }),
+      });
+    }
+    const got = d.installed || d.imported || [];
+    if (got.length) {
+      toast("装好了：" + got.join("、"));
+      got.forEach((n) => S.pickedSkills.add(n));
+      S.spTab = "installed";
+    } else {
+      S.spError = "没有新增技能" + (d.skipped && d.skipped.length
+        ? "：" + d.skipped.map((x) => x[0] + "：" + x[1]).join("；") : "");
+    }
+    await loadSkills();
+  } catch (e) {
+    S.spError = "安装失败：" + e.message;
+  }
+  renderSkillPanel();
+}
+
+function bindSkillPanelTools() {
+  const linkBtn = $("sp-add-link");
+  if (linkBtn) linkBtn.onclick = addByLink;
+
+  const fileBtn = $("sp-add-file");
+  const fileInput = $("sp-file");
+  const dirInput = $("sp-dir");
+  if (fileBtn && fileInput) {
+    fileBtn.onclick = (e) => {
+      // Shift 点击选文件夹；普通点击选压缩包。
+      if (e.shiftKey && dirInput) dirInput.click();
+      else fileInput.click();
+    };
+  }
+  if (fileInput) {
+    fileInput.onchange = async () => {
+      const files = [...fileInput.files];
+      fileInput.value = "";
+      for (const f of files) await uploadArchive(f);
+      await loadSkills();
+      renderSkillPanel();
+    };
+  }
+  if (dirInput) {
+    dirInput.onchange = async () => {
+      const files = [...dirInput.files];
+      dirInput.value = "";
+      if (!files.length) return;
+      const out = files.map((f) => ({
+        path: (f.webkitRelativePath || f.name).replace(/^[^/]+\//, ""),
+        file: f,
+      }));
+      const hasSkill = out.some((f) => f.path.endsWith("SKILL.md"));
+      if (!hasSkill) {
+        S.spError = "选中的文件夹里没有 SKILL.md，无法识别为技能。";
+        renderSkillPanel();
+        return;
+      }
+      await sendFolder(out, files[0].webkitRelativePath.split("/")[0] || "folder");
+    };
+  }
+
+  // 拖放：面板里的区域 + 整页。整页更符合资源管理器的直觉。
+  const panel = $("skill-panel");
+  ["dragenter", "dragover"].forEach((evt) => {
+    document.addEventListener(evt, (e) => {
+      if (!e.dataTransfer || ![...e.dataTransfer.types].includes("Files")) return;
+      e.preventDefault();
+      setDropActive(true);
+    });
+  });
+  document.addEventListener("dragleave", (e) => {
+    if (e.relatedTarget) return;
+    setDropActive(false);
+  });
+  document.addEventListener("drop", async (e) => {
+    if (!e.dataTransfer) return;
+    e.preventDefault();
+    setDropActive(false);
+    if (panel.hidden) openSkillPanel("installed");
+    await handleDropped(e.dataTransfer);
+  });
+}
+
 async function loadSkills() {
   try {
     const d = await api("/api/skills");

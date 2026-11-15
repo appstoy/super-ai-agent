@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+- **The skill panel now imports from where skills actually live.** Three tabs
+  instead of two, and the two new ones are what makes the feature usable:
+  - **其他 agent**: scans the folders every agent tool already uses
+    (`~/.claude/skills`, `~/.codex/skills`, `~/.gemini/skills`,
+    `~/.agents/skills`, Cursor, OpenCode, VS Code, and Magpie's own library) and
+    offers one-click import. On this machine that is **20 skills across 4
+    agents**. Sub-filter pills narrow to a single agent; 全部导入 takes the rest.
+  - **Drag a folder or .zip/.tar.gz anywhere on the page**, or use 📁 选择文件.
+    A wrapped archive installs under the skill's own declared name; a folder
+    holding several skills imports them all; anything without `SKILL.md` is
+    refused with that reason. One broken skill never blocks the rest.
+  - **🔗 链接 / 目录** accepts a local folder path, a Magpie ref, or a git URL.
+  - Discovery fingerprints skill content, so the same folder copied under three
+    agents shows as one row naming all three rather than three duplicates. A
+    folder with no `SKILL.md` is skipped instead of listed.
+  - Import copies; the other agent's folder is never modified.
+  - `GET /api/skills/agents`, `POST /api/skills/import`,
+    `POST /api/skills/upload` (raw archive), `POST /api/skills/upload-files`
+    (a folder as files).
+  - Archives are unpacked in a temp tree and rejected on `../../` entries or
+    contained links — zip slip and symlink escapes are both refused.
+
+- **Dropped folders do not need a client-side zip library.** Reading a folder
+  and packing it in the browser would mean shipping JSZip or calling a CDN,
+  which breaks the offline story. The page sends the files as base64 and the
+  server rebuilds the tree, so both folders and archives end up in the same
+  "find SKILL.md, validate, copy" path with no new runtime dependency.
+
 - **Skills finally have a visible entry point.** The only way to pick a skill
   was to type `/` in the composer, which nobody discovers by accident - the
   feature existed and looked like it did not. There is now a **技能** button in
