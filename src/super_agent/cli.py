@@ -31,6 +31,12 @@ from super_agent.ingress.schemas import TriggerInput
 from super_agent.ports.model import ChatMessage, MessageRole, ModelGateway, ModelRequest
 from super_agent.skills.installer import install_skill, uninstall_skill
 from super_agent.skills.loader import SkillRegistry
+from super_agent.skills.market import (
+    find_market_dir,
+    load_market,
+    resolve_ref,
+    search_market,
+)
 from super_agent.storage.database import (
     create_engine_for_url,
     create_schema,
@@ -86,8 +92,32 @@ def build_parser() -> argparse.ArgumentParser:
     skills_install.add_argument(
         "--force", action="store_true", help="overwrite an existing skill folder"
     )
+    skills_install.add_argument(
+        "--from-magpie",
+        action="store_true",
+        help="treat source as a Magpie catalogue ref (owner/repo/skill)",
+    )
+    skills_install.add_argument(
+        "--market-dir",
+        default=None,
+        help="override where Magpie's skill catalogue lives",
+    )
     skills_remove = skills_sub.add_parser("remove", help="remove an installed skill")
     skills_remove.add_argument("name")
+    skills_market = skills_sub.add_parser(
+        "market", help="search Magpie's skill catalogue (735 entries on this machine)"
+    )
+    skills_market.add_argument("query", nargs="?", default="", help="name or keyword")
+    skills_market.add_argument("--limit", type=int, default=20)
+    skills_market.add_argument(
+        "--official", action="store_true", help="only entries Magpie marks official"
+    )
+    skills_market.add_argument(
+        "--json", action="store_true", help="print the raw rows instead of a table"
+    )
+    skills_market.add_argument(
+        "--market-dir", default=None, help="override where Magpie's catalogue lives"
+    )
     skills_sub.add_parser("path", help="print the library folder skills are installed into")
     subparsers.add_parser("model-check", help="call the configured OpenAI-compatible model")
     subparsers.add_parser("magpie-check", help="inspect a local Magpie gateway and model catalog")
@@ -161,10 +191,49 @@ def main(argv: Sequence[str] | None = None) -> int:
         if action == "path":
             print(library)
             return 0
+        if action == "market":
+            market_dir = find_market_dir(args.market_dir)
+            if market_dir is None:
+                raise SystemExit(
+                    "Magpie's skill catalogue was not found. Is Magpie installed? "
+                    "Point at it with --market-dir or MAGPIE_MARKET_DIR."
+                )
+            entries = search_market(
+                load_market(market_dir), args.query,
+                limit=args.limit, official_only=args.official,
+            )
+            if args.json:
+                print(json.dumps(
+                    [entry.to_dict() for entry in entries],
+                    ensure_ascii=False, sort_keys=True,
+                ))
+                return 0
+            if not entries:
+                print("没有匹配的技能。换个关键词，或去掉 --official 试试。")
+                return 1
+            for entry in entries:
+                mark = "*" if entry.official else " "
+                print(f"{mark} {entry.installs:>9,}  {entry.ref}")
+                if entry.description:
+                    print(f"             {entry.description[:88]}")
+            print(f"\n共 {len(entries)} 条。安装：super-agent skills install <ref> --from-magpie")
+            return 0
         if action == "install":
             try:
+                source = args.source
+                chosen: str | None = None
+                if args.from_magpie:
+                    market_dir = find_market_dir(args.market_dir)
+                    if market_dir is None:
+                        raise SystemExit(
+                            "Magpie's skill catalogue was not found; "
+                            "pass --market-dir or MAGPIE_MARKET_DIR."
+                        )
+                    entry = resolve_ref(load_market(market_dir), source)
+                    source, chosen = entry.source, entry.skill_id
+                    print(f"从 Magpie 技能市场安装：{entry.ref}", file=sys.stderr)
                 installed = install_skill(
-                    args.source, library, ref=args.ref, force=args.force
+                    source, library, ref=args.ref, force=args.force, only=chosen
                 )
             except AgentError as exc:
                 raise SystemExit(str(exc)) from exc

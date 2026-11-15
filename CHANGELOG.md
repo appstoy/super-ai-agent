@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- **Install skills straight from Magpie's catalogue.** Magpie keeps a local
+  index of skills (`market/skills.json` + `market/about.json`, keyed
+  `owner/repo/skill`; 735 entries across 96 repos on this machine). SAA reads
+  those files directly — Magpie does not need to be running:
+  - `super-agent skills market <query>` searches it (ranking puts a precise name
+    match above a more popular prefix match, which sorting by installs alone got
+    wrong); `--official` filters to official entries.
+  - `super-agent skills install <ref> --from-magpie` clones the repository once
+    and copies only the referenced skill out of it.
+  - In the page, typing `/` shows local matches first and then the Magpie
+    section with install counts; clicking one installs it and pre-selects it.
+  - `GET /api/skills/market`, `POST /api/skills/install`.
+  - A configured `SUPER_AGENT_MAGPIE_MARKET_DIR` that is wrong reports the
+    market as unavailable instead of silently reading another Magpie install.
+
+- **An explicitly configured skill library is now the install target.** The
+  roots list always put `<workspace>/skills` first, so a configured
+  `SUPER_AGENT_SKILL_PATHS` was read from but never installed into — install and
+  listing could point at different folders. Configured paths now win, and the
+  workspace default applies only when nothing is configured.
+
 - **Skills can be installed, and a running server picks them up.** Previously a
   skill had to be placed by hand and then required a restart, because the
   library was scanned once at startup:

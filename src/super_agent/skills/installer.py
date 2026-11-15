@@ -137,11 +137,14 @@ def install_skill(
     *,
     ref: str | None = None,
     force: bool = False,
+    only: str | None = None,
 ) -> InstallResult:
     """Copy one or several skills from source into the library.
 
     source may be a local folder holding skills, a single skill folder, or a git
     repository (which may hold one skill at the root or many in subfolders).
+    ``only`` narrows a multi-skill repository to one skill id, which is what a
+    catalogue entry needs: Magpie lists "owner/repo/skill", not whole repos.
     """
 
     text = str(source).strip()
@@ -171,6 +174,23 @@ def install_skill(
                 f"no {SKILL_FILE_NAME} found in {origin}. A skill is a folder "
                 f"containing {SKILL_FILE_NAME}."
             )
+        if only:
+            wanted = str(only).strip().strip("/").lower()
+            narrowed = [
+                folder
+                for folder in found
+                if folder.name.lower() == wanted
+                or str(folder.relative_to(root)).replace("\\", "/").lower() == wanted
+                or str(folder.relative_to(root)).replace("\\", "/").lower().endswith(
+                    "/" + wanted
+                )
+            ]
+            if not narrowed:
+                available = ", ".join(sorted(folder.name for folder in found)[:12])
+                raise ValidationError(
+                    f"{origin} has no skill {wanted!r}. Known skills: {available}"
+                )
+            found = narrowed
 
         existing = SkillRegistry()
         for name in library.iterdir():

@@ -222,6 +222,8 @@ Runnable acceptance evidence (21 checks, no credentials required):
 
 装技能：
 
+    super-agent skills market "code review"       # 搜 Magpie 技能市场（本机 735 个）
+    super-agent skills install anthropics/skills/webapp-testing --from-magpie
     super-agent skills install ./my-skills        # 从文件夹
     super-agent skills install someone/skills     # 从 GitHub 仓库
     super-agent skills list                       # 看装了什么

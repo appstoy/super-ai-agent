@@ -445,11 +445,17 @@ def resolve_skill_roots(settings: Settings, workspace_root: Path) -> list[Path]:
     or at one individual skill folder.
     """
 
-    roots: list[Path] = [workspace_root / "skills"]
+    roots: list[Path] = []
+    # An explicit library wins and becomes the install target. Falling back to
+    # <workspace>/skills only when nothing is configured keeps the default
+    # behaviour, and stops installs from landing somewhere the user did not
+    # configure just because the configured folder was still empty.
     for item in settings.skill_paths.split(os.pathsep):
         text = item.strip()
         if text:
             roots.append(Path(text).expanduser())
+    if not roots:
+        roots.append(workspace_root / "skills")
     return roots
 
 

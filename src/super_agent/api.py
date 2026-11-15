@@ -41,7 +41,15 @@ from super_agent.errors import AgentError
 from super_agent.ingress.schemas import TriggerInput
 from super_agent.policies.speculative_runner import SpeculativeRunner
 from super_agent.ports.model import ChatMessage, MessageRole, ModelGateway, ModelRequest
+from super_agent.skills.installer import install_skill
 from super_agent.skills.library import LiveSkillLibrary
+from super_agent.skills.market import (
+    MarketEntry,
+    find_market_dir,
+    load_market,
+    resolve_ref,
+    search_market,
+)
 from super_agent.storage.database import (
     create_engine_for_url,
     create_schema,
@@ -107,6 +115,17 @@ class TaskFlagRequest(BaseModel):
     pinned: bool | None = None
     archived: bool | None = None
     color: str | None = Field(default=None, max_length=16)
+
+
+class SkillInstallRequest(BaseModel):
+    """One install request: a market ref, a git URL, or a local folder."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: str = Field(min_length=1, max_length=500)
+    from_magpie: bool = False
+    ref: str | None = Field(default=None, max_length=255)
+    force: bool = False
 
 
 class WebhookRequest(BaseModel):
@@ -330,6 +349,67 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "failed": [list(item) for item in skill_registry.failed],
             "count": len(skills),
         }
+
+    # ---- Magpie skill market ------------------------------------------------
+    # Magpie ships a local catalogue of skills; browsing and installing from it
+    # here means the page is not limited to whatever is already in the folder.
+
+    def _market() -> tuple[list[MarketEntry], Path]:
+        """Load Magpie's catalogue, or raise a 503 that says what to do."""
+
+        market_dir = find_market_dir(active_settings.magpie_market_dir)
+        if market_dir is None:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "没有找到 Magpie 的技能目录。确认 Magpie 已安装，"
+                    "或用 SUPER_AGENT_MAGPIE_MARKET_DIR 指定路径。"
+                ),
+            )
+        try:
+            return load_market(market_dir), market_dir
+        except AgentError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    @app.get("/api/skills/market")
+    def search_skill_market(
+        q: str = "", limit: int = 30, official: bool = False
+    ) -> dict[str, object]:
+        """Search Magpie's catalogue so the page can offer skills to install."""
+
+        entries, market_dir = _market()
+        rows = search_market(entries, q, limit=limit, official_only=official)
+        return {
+            "market_dir": str(market_dir),
+            "total": len(entries),
+            "query": q,
+            "count": len(rows),
+            "skills": [entry.to_dict() for entry in rows],
+        }
+
+    @app.post("/api/skills/install")
+    def install_from_market(payload: SkillInstallRequest) -> dict[str, object]:
+        """Install one skill from the market (or from any git URL / folder)."""
+
+        library = skill_registry.roots[0] if skill_registry.roots else workspace_root
+        source = payload.source
+        only: str | None = None
+        if payload.from_magpie:
+            entries, _ = _market()
+            try:
+                entry = resolve_ref(entries, source)
+            except AgentError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            source, only = entry.source, entry.skill_id
+        try:
+            result = install_skill(
+                source, library, ref=payload.ref, force=payload.force, only=only
+            )
+        except AgentError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        # The library re-stamps itself, so the next /api/skills read picks this
+        # up without a restart; report what landed so the page can refresh.
+        return result.to_dict()
 
     @app.get("/api/config")
     def config_summary() -> dict[str, object]:

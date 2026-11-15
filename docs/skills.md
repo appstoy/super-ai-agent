@@ -96,6 +96,40 @@ refresh — for the picker, for the task payload, and for the model's
 `skill.list` / `skill_read`. The check is two `stat` calls per skill folder and
 skips re-parsing entirely when nothing moved.
 
+## Installing from Magpie's catalogue
+
+Magpie keeps a local catalogue of skills (`market/skills.json` plus
+`market/about.json`) keyed by `owner/repo/skill`. SAA reads those two files
+directly — Magpie does not have to be running, and nothing is scraped from its
+process. On this machine that is **735 skills across 96 repositories**.
+
+```
+super-agent skills market "code review"     # search the catalogue
+super-agent skills market --official        # only Magpie's official entries
+super-agent skills install anthropics/skills/webapp-testing --from-magpie
+```
+
+The install resolves the ref to its repository, clones that once, and copies
+only the referenced skill — a repo with 25 skills installs the one you asked
+for.
+
+In the page, type `/` and keep typing: local skills match first, then the
+Magpie section appears with install counts. Clicking a row installs it and
+pre-selects it for the current task.
+
+**Where the catalogue is found.** `SUPER_AGENT_MAGPIE_MARKET_DIR`, then
+`MAGPIE_MARKET_DIR`, then the per-user Magpie locations (`%LOCALAPPDATA%\magpie\market`
+on Windows, `~/.magpie/market`, `~/Library/Application Support/magpie/market`,
+`~/.local/share/magpie/market`).
+
+**An explicitly configured path is trusted literally.** If it does not contain
+`skills.json`, the market is reported as unavailable rather than silently
+falling back to some other Magpie on the machine — a typo should look like a
+typo, not like a working setup.
+
+Nothing here is required: without the catalogue the page simply shows local
+skills only, and `skills market` exits with a message saying where it looked.
+
 ### What install refuses to do
 
 - **Land a broken skill.** Every candidate is parsed first; anything without a

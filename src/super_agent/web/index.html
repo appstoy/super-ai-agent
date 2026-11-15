@@ -155,6 +155,25 @@ button,input,select,textarea{font:inherit;color:inherit}
   padding:7px 12px 3px;color:var(--ink3);font-size:11.5px;
   border-top:1px solid var(--line2);margin-top:5px;
 }
+.slash-sec{
+  padding:9px 12px 4px;color:var(--ink3);font-size:11.5px;
+  display:flex;align-items:center;gap:7px;
+}
+.slash-sec .n{flex:1}
+.slash-sec button{
+  border:1px solid var(--line);background:var(--panel);color:var(--ink2);
+  border-radius:99px;padding:3px 9px;font-size:11px;cursor:pointer;
+}
+.slash-sec button:hover{border-color:var(--accent);color:var(--accent)}
+.market-item{opacity:.96}
+.market-item .nm{color:var(--ink2);font-weight:500}
+.market-item .inst{color:var(--ink3);font-size:11px;flex:none}
+.market-item .add{
+  flex:none;font-size:11px;color:var(--accent);font-weight:600;
+  border:1px solid var(--accent);border-radius:99px;padding:1px 8px;
+}
+.market-item.installing{opacity:.55;pointer-events:none}
+.slash-busy{padding:10px 14px;color:var(--ink3);font-size:12.5px}
 .picked-row{
   display:flex;flex-wrap:wrap;gap:6px;align-items:center;
   justify-content:center;margin-top:10px;
@@ -711,6 +730,10 @@ const S = {
   pickedSkills: new Set(),
   slashItems: [],
   slashIndex: 0,
+  marketRows: [],
+  marketQuery: "",
+  marketLoading: false,
+  marketTimer: null,
   expanded: {},
   foldKey: "default",
   seq: 0,
@@ -1891,12 +1914,21 @@ function renderSlash() {
       '<code>skills/名字/SKILL.md</code> 就会出现。</div>';
     return;
   }
+  // Ask Magpie for catalogue matches alongside the local list.
+  scheduleMarketSearch(query);
   const items = slashMatches(query);
   S.slashItems = items;
   if (S.slashIndex >= items.length) S.slashIndex = 0;
   menu.hidden = false;
   if (!items.length) {
-    menu.innerHTML = '<div class="slash-empty">没有匹配「' + esc(query) + '」的技能</div>';
+    // No local match does not mean no skill exists: the Magpie catalogue may
+    // still have it, so show that section instead of a dead-end message.
+    const marketOnly = marketSectionHtml(query);
+    menu.innerHTML = marketOnly
+      ? '<div class="slash-empty">本地没有「' + esc(query) + '」</div>' + marketOnly +
+        '<div class="slash-foot">↑↓ 选择 · Enter 确认 · Esc 关闭</div>'
+      : '<div class="slash-empty">没有匹配「' + esc(query) + '」的技能</div>';
+    bindMarketRows(menu);
     return;
   }
   menu.innerHTML = items.map((s, i) => {
@@ -1908,6 +1940,7 @@ function renderSlash() {
       '<span class="ds">' + esc(s.description) + "</span>" +
       (on ? '<span class="on">已选</span>' : "") + "</button>";
   }).join("") +
+    marketSectionHtml(query) +
     '<div class="slash-foot">↑↓ 选择 · Enter 确认 · Esc 关闭</div>';
   menu.querySelectorAll("[data-slash]").forEach((btn) => {
     btn.onmousedown = (e) => {
@@ -1916,6 +1949,90 @@ function renderSlash() {
       applySlash(btn.dataset.slash);
     };
   });
+  bindMarketRows(menu);
+}
+
+/* --- Magpie skill market: browse and install from the composer --- */
+function fmtCount(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
+  if (n >= 1000) return Math.round(n / 1000) + "k";
+  return String(n);
+}
+
+function marketSectionHtml(query) {
+  if (S.marketLoading) {
+    return '<div class="slash-sec"><span class="n">Magpie 技能市场</span></div>' +
+      '<div class="slash-busy">正在搜索…</div>';
+  }
+  if (!S.marketRows.length) return "";
+  const rows = S.marketRows.slice(0, 6).map((m) => {
+    const have = S.skills.some((s) => s.name === m.skill_id);
+    return '<button type="button" class="slash-item market-item"' +
+      ' data-market="' + esc(m.ref) + '" title="' + esc(m.description || m.ref) + '">' +
+      '<span class="nm">' + esc(m.skill_id) + '</span>' +
+      '<span class="ds">' + esc(m.source) + '</span>' +
+      '<span class="inst">' + (m.installs ? fmtCount(m.installs) : "") + '</span>' +
+      '<span class="add">' + (have ? "已装" : "+ 装") + '</span></button>';
+  }).join("");
+  return '<div class="slash-sec"><span class="n">Magpie 技能市场</span></div>' + rows;
+}
+
+function bindMarketRows(menu) {
+  menu.querySelectorAll("[data-market]").forEach((btn) => {
+    btn.onmousedown = (e) => {
+      e.preventDefault();
+      installFromMarket(btn.dataset.market, btn);
+    };
+  });
+}
+
+function scheduleMarketSearch(query) {
+  clearTimeout(S.marketTimer);
+  const q = (query || "").trim();
+  if (q.length < 2) { S.marketRows = []; S.marketLoading = false; return; }
+  S.marketTimer = setTimeout(() => runMarketSearch(q), 260);
+}
+
+async function runMarketSearch(query) {
+  S.marketLoading = true;
+  if (!$("slash-menu").hidden) renderSlash();
+  try {
+    const d = await api("/api/skills/market?limit=6&q=" + encodeURIComponent(query));
+    S.marketRows = d.skills || [];
+    S.marketQuery = query;
+  } catch {
+    // Magpie may not be installed; the local list still works on its own.
+    S.marketRows = [];
+  } finally {
+    S.marketLoading = false;
+    if (!$("slash-menu").hidden) renderSlash();
+  }
+}
+
+async function installFromMarket(ref, btn) {
+  if (btn) btn.classList.add("installing");
+  toast("正在从 Magpie 安装 " + ref + " …");
+  try {
+    const d = await api("/api/skills/install", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: ref, from_magpie: true }),
+    });
+    await loadSkills();
+    const names = (d.installed || []);
+    if (names.length) {
+      toast("装好了：" + names.join("、"));
+      names.forEach((n) => S.pickedSkills.add(n));
+      renderSkills();
+      renderSlash();
+    } else {
+      toast("没有新增技能（已装过，或解析失败）");
+      if (btn) btn.classList.remove("installing");
+    }
+  } catch (e) {
+    toast("安装失败：" + e.message);
+    if (btn) btn.classList.remove("installing");
+  }
 }
 
 function closeSlash() {

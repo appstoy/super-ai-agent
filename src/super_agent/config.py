@@ -48,6 +48,9 @@ class Settings:
     # folders containing SKILL.md; empty means "<workspace_root>/skills".
     skills_enabled: bool = True
     skill_paths: str = ""
+    # Magpie keeps a local skill catalogue (market/skills.json). Empty means
+    # "find it automatically"; set this to point at another location.
+    magpie_market_dir: str = ""
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -112,6 +115,9 @@ class Settings:
             skills_enabled=os.getenv("SUPER_AGENT_SKILLS_ENABLED", "1").lower()
             not in {"0", "false", "no"},
             skill_paths=os.getenv("SUPER_AGENT_SKILL_PATHS", defaults.skill_paths),
+            magpie_market_dir=os.getenv(
+                "SUPER_AGENT_MAGPIE_MARKET_DIR", defaults.magpie_market_dir
+            ),
         )
 
 def _positive_int(raw: str | None, default: int) -> int:
