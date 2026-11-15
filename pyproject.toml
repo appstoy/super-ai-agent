@@ -47,6 +47,9 @@ addopts = "-ra"
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Installed third-party skills (e.g. from the Magpie catalogue) ship their
+# own example scripts and are not part of this package's source tree.
+exclude = ["skills"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
