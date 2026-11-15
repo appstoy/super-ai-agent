@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -24,23 +25,23 @@ def test_read_file_tool_stays_inside_allowed_root(tmp_path: Path) -> None:
 
 
 def test_command_tool_requires_approval_and_uses_allowlist(tmp_path: Path) -> None:
-    tool = AllowlistedCommandTool(frozenset({"cmd.exe"}), (tmp_path,))
+    # The tool spawns [command, *args] with shell=False, so `command` has to be a
+    # real executable. Using the running interpreter keeps this identical on
+    # Linux and Windows -- the old version hardcoded cmd.exe and only ran on Windows.
+    script = tmp_path / "hello.py"
+    script.write_text("print('ok')\n", encoding="utf-8")
+
+    command = sys.executable
+    tool = AllowlistedCommandTool(frozenset({command}), (tmp_path,))
     policy = ToolPolicy()
     registry = ToolRegistry([tool], policy=policy)
     context = ExecutionContext(
-        granted_capabilities=frozenset({"command.run"}), timeout_seconds=2.0
+        granted_capabilities=frozenset({"command.run"}), timeout_seconds=15.0
     )
-    with pytest.raises(PermissionDeniedError, match="approval"):
-        registry.execute(
-            "command.run",
-            {"command": "cmd.exe", "args": ["/c", "echo ok"], "cwd": str(tmp_path)},
-            context,
-        )
-    result = registry.execute(
-        "command.run",
-        {"command": "cmd.exe", "args": ["/c", "echo ok"], "cwd": str(tmp_path)},
-        context,
-        approved=True,
-    )
-    assert "ok" in result.output
+    payload = {"command": command, "args": [str(script)], "cwd": str(tmp_path)}
 
+    with pytest.raises(PermissionDeniedError, match="approval"):
+        registry.execute("command.run", payload, context)
+
+    result = registry.execute("command.run", payload, context, approved=True)
+    assert "ok" in result.output
