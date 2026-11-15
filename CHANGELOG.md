@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- **Skills finally have a visible entry point.** The only way to pick a skill
+  was to type `/` in the composer, which nobody discovers by accident - the
+  feature existed and looked like it did not. There is now a **技能** button in
+  the composer that opens a panel:
+  - *已安装*: every skill on disk with its title, description, tags, and 选用 /
+    移除 per row, plus a search box and a selection count on the button.
+  - *Magpie 市场*: search the catalogue and install with one click; already
+    installed rows say so instead of offering a duplicate install.
+  - Installing switches to *已安装* and selects the skill, because landing back
+    on the market list with no sign of it reads as "nothing happened".
+  - An install failure stays in the panel with its full text (Magpie's index
+    drifts, so a ref can point at a folder that no longer exists and the message
+    lists what the repo does have). A three-second toast cannot carry that.
+  - `DELETE /api/skills/{name}` backs the 移除 button; it still refuses to delete
+    a hand-written skill.
+  - The `/` menu and the panel close each other rather than overlapping.
+
 - **Install skills straight from Magpie's catalogue.** Magpie keeps a local
   index of skills (`market/skills.json` + `market/about.json`, keyed
   `owner/repo/skill`; 735 entries across 96 repos on this machine). SAA reads

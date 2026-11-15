@@ -51,7 +51,13 @@ resource file, which the model reads on demand through `skill_read`.
 
 There are two paths, and both matter:
 
-1. **The user picks it.** Two ways, same result:
+1. **The user picks it.** Three ways, same result:
+   - **The 技能 button in the composer** — the discoverable entry point. It
+     opens a panel with two tabs: *已安装* (what is on disk, with 选用 / 移除 per
+     row and a search box) and *Magpie 市场* (search the catalogue and install
+     with one click). Installing switches back to *已安装* so the new skill is
+     visible, and failures stay on screen with the full message instead of
+     flashing past in a toast.
    - Type `/` in the composer. The list opens right under the cursor, `/rel`
      filters it, `↑`/`↓` move, `Enter` picks, `Esc` closes. The `/token` is
      removed from the message so the prompt stays what the person meant to say.
@@ -113,9 +119,10 @@ The install resolves the ref to its repository, clones that once, and copies
 only the referenced skill — a repo with 25 skills installs the one you asked
 for.
 
-In the page, type `/` and keep typing: local skills match first, then the
-Magpie section appears with install counts. Clicking a row installs it and
-pre-selects it for the current task.
+In the page, open the **技能** panel and switch to *Magpie 市场*: search, then
+click 安装. Installing selects the skill for the current task and jumps back to
+*已安装* so you can see it landed. Typing `/` in the composer offers the same
+catalogue inline once local skills stop matching.
 
 **Where the catalogue is found.** `SUPER_AGENT_MAGPIE_MARKET_DIR`, then
 `MAGPIE_MARKET_DIR`, then the per-user Magpie locations (`%LOCALAPPDATA%\magpie\market`

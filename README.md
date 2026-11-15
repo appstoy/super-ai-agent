@@ -212,9 +212,10 @@ Runnable acceptance evidence (21 checks, no credentials required):
     skills/release-notes/SKILL.md     # 项目自带示例
     skills/html-page/SKILL.md
 
-选技能（三选一）：
+选技能：
 
-    # 网页：输入框里打 / 弹列表，↑↓ 选、Enter 确认；或点下方胶囊
+    # 网页：点输入框里的「✦ 技能」按钮 —— 已安装 / Magpie 市场 两个标签页，
+    #      能搜、能选、能装、能删。也可以打 / 弹列表，↑↓ 选、Enter 确认。
     # CLI：
     super-agent submit "写一段 v2.1 更新说明" --skill release-notes
     # API：

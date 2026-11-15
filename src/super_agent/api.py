@@ -41,7 +41,7 @@ from super_agent.errors import AgentError
 from super_agent.ingress.schemas import TriggerInput
 from super_agent.policies.speculative_runner import SpeculativeRunner
 from super_agent.ports.model import ChatMessage, MessageRole, ModelGateway, ModelRequest
-from super_agent.skills.installer import install_skill
+from super_agent.skills.installer import install_skill, uninstall_skill
 from super_agent.skills.library import LiveSkillLibrary
 from super_agent.skills.market import (
     MarketEntry,
@@ -410,6 +410,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # The library re-stamps itself, so the next /api/skills read picks this
         # up without a restart; report what landed so the page can refresh.
         return result.to_dict()
+
+    @app.delete("/api/skills/{name}")
+    def delete_skill(name: str) -> dict[str, object]:
+        """Remove an installed skill.
+
+        Only skills the installer owns are deleted; a hand-written folder is
+        refused with an explanation, because silently deleting someone's own
+        work on a name collision cannot be undone.
+        """
+
+        library = skill_registry.roots[0] if skill_registry.roots else workspace_root
+        try:
+            removed = uninstall_skill(name, library)
+        except AgentError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"removed": str(removed)}
 
     @app.get("/api/config")
     def config_summary() -> dict[str, object]:
