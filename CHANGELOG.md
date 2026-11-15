@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- **A long skill no longer disappears.** `appstoy-video` has a 36 000-character
+  SKILL.md; the 24 000 cap rejected it, and because discovery swallows parse
+  failures the skill simply was not in the list — the user's reasonable
+  conclusion was "SAA does not have it". Big bodies now load with
+  `on_demand: true`: selecting one inlines the first 24 000 characters plus a
+  pointer to `skill_read` for the rest, so it stays usable without drowning the
+  prompt.
+- **A skill that fails to parse is reported per agent** (`skipped`) instead of
+  vanishing, both in `GET /api/skills/agents` and in the panel.
+- **Only agents installed on this machine get a pill.** `GET /api/skills/agents`
+  used to return every known location, so the filter row offered `Cursor 0`,
+  `OpenCode 0`, `VS Code 0` — noise that made the five real agents harder to
+  pick out.
+
 - **The skill panel now imports from where skills actually live.** Three tabs
   instead of two, and the two new ones are what makes the feature usable:
   - **其他 agent**: scans the folders every agent tool already uses

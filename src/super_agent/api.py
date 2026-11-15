@@ -472,13 +472,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         """List skills found in other agents' folders on this machine."""
 
         sources, skills = discover_agent_skills()
+        # Only agents that actually exist here: listing "VS Code 0" is noise
+        # that makes the real choices harder to see.
+        present = [source for source in sources if source.exists]
         rows = [
             item.to_dict()
             for item in skills
             if agent is None or agent in [pair[0] for pair in item.agents]
         ]
         return {
-            "sources": [source.to_dict() for source in sources],
+            "sources": [source.to_dict() for source in present],
             "skills": rows,
             "count": len(rows),
             "any_found": any(source.exists for source in sources),

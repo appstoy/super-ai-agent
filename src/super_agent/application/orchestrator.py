@@ -1560,8 +1560,11 @@ class AgentOrchestrator:
                 "authoritative for HOW to do the work:"
             )
             for skill in selected:
+                # excerpt() inlines the whole body for normal skills and only a
+                # head plus a skill_read pointer for oversized ones, so a 36k
+                # skill cannot crowd out the actual task.
                 lines.append(
-                    "=== skill: " + skill.name + " ===\n" + skill.body
+                    "=== skill: " + skill.name + " ===\n" + skill.excerpt()
                     + "\n=== end skill: " + skill.name + " ==="
                 )
                 if skill.resources:

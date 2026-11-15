@@ -77,12 +77,33 @@ def test_missing_description_is_rejected(tmp_path: Path) -> None:
     assert "description" in str(exc.value)
 
 
-def test_oversized_body_is_rejected(tmp_path: Path) -> None:
-    folder = _write_skill(tmp_path, "huge", body="x" * (MAX_BODY_CHARS + 1))
+def test_oversized_body_loads_on_demand_instead_of_vanishing(tmp_path: Path) -> None:
+    """A long skill is real, not invalid.
 
-    with pytest.raises(ValidationError) as exc:
-        parse_skill_file(folder / "SKILL.md")
-    assert "limit" in str(exc.value)
+    appstoy-video is 36k chars of routing tables. Rejecting it made it absent
+    from the list with no explanation; now it loads and only its head is
+    inlined, with the rest available through skill_read.
+    """
+
+    folder = _write_skill(tmp_path, "huge", body="x" * (MAX_BODY_CHARS + 500))
+
+    skill = parse_skill_file(folder / "SKILL.md")
+
+    assert skill.on_demand is True
+    assert len(skill.body) == MAX_BODY_CHARS + 500
+    excerpt = skill.excerpt()
+    assert len(excerpt) < len(skill.body)
+    assert "skill_read" in excerpt
+
+
+def test_a_normal_body_is_inlined_whole(tmp_path: Path) -> None:
+    folder = _write_skill(tmp_path, "short", body="# Short\n\nDo it.")
+
+
+    skill = parse_skill_file(folder / "SKILL.md")
+
+    assert skill.on_demand is False
+    assert skill.excerpt() == skill.body
 
 
 def test_invalid_name_is_rejected(tmp_path: Path) -> None:

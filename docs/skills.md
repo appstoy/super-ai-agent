@@ -97,8 +97,14 @@ its own config dir, one sub-folder per skill with a `SKILL.md`.
     ~/.cursor/skills, ~/.opencode/skills, ~/.vscode/skills
     ~/.config/magpie/library/skills       (Magpie's own library)
 
-SAA scans these, and the sub-filter pills let you narrow to one agent. Two
-details that matter in practice and are both handled:
+`~/.agents/skills` is the **shared convention** (shown as "Agents (共享约定)"):
+a neutral location several agent tools agree to read, so one skill folder can
+be shared without belonging to any single vendor.
+
+SAA scans these, and the sub-filter pills let you narrow to one agent. Only
+agent folders that **exist on this machine** get a pill — listing "VS Code 0"
+would just make the real choices harder to find. Two more details that matter
+in practice and are both handled:
 
 * **The same skill usually appears under several agents.** Agents are given a
   copy of the same folder, so discovery fingerprints the content and shows one
@@ -106,6 +112,18 @@ details that matter in practice and are both handled:
 * **A folder is not a skill.** `.gemini/skills` can hold folders with only
   assets. Presence of `SKILL.md` is checked, so those never show up as
   importable.
+* **A skill that cannot be read is reported, not hidden.** If a folder has a
+  SKILL.md that fails to parse, the panel says which one and why, instead of
+  leaving it out silently and letting you conclude you do not have it.
+
+### Long skills load on demand
+
+A `SKILL.md` longer than 24 000 characters is not rejected. Real skills get
+that big — `appstoy-video` is 36 000 characters of routing tables — and
+refusing them made them disappear from the list. Instead the skill loads with
+`on_demand` set: selecting it inlines the first 24 000 characters plus a note
+telling the model to call `skill_read` for the rest. The full text always stays
+on disk.
 
 Importing copies; the other agent's folder is untouched. Bulk `全部导入` takes
 everything missing from the current filter.

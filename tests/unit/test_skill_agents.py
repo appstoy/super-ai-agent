@@ -150,3 +150,54 @@ def test_importing_from_a_missing_folder_is_rejected(tmp_path: Path) -> None:
         import_from_agent("claude", tmp_path / "lib", home=_home(tmp_path))
     assert "不存在" in str(exc.value)
 
+
+
+def test_only_agents_that_exist_are_listed(tmp_path: Path) -> None:
+    """A pill for an agent that is not installed is noise."""
+
+    home = _home(tmp_path)
+    _skill(home / ".claude" / "skills", "alpha")
+
+    sources, _ = discover_agent_skills(home)
+
+    present = [s.agent_id for s in sources if s.exists]
+    assert present == ["claude"]
+    assert len(sources) > len(present)  # the rest are reported as absent
+
+
+def test_a_broken_skill_is_reported_not_silently_dropped(tmp_path: Path) -> None:
+    """This is what hid appstoy-video: it parsed badly and simply vanished."""
+
+    home = _home(tmp_path)
+    folder = home / ".claude" / "skills" / "broken"
+    folder.mkdir(parents=True)
+    (folder / "SKILL.md").write_text("---\ndescription: no body\n---\n", encoding="utf-8")
+    _skill(home / ".claude" / "skills", "fine")
+
+    sources, skills = discover_agent_skills(home)
+
+    claude = next(s for s in sources if s.agent_id == "claude")
+    assert [s.skill.name for s in claude.skills] == ["fine"]
+    assert [name for name, _ in claude.skipped] == ["broken"]
+    assert claude.skipped[0][1]  # a reason, not an empty string
+
+
+def test_a_large_skill_is_listed_rather_than_dropped(tmp_path: Path) -> None:
+    """36k chars is a real skill, not a broken one."""
+
+    from super_agent.skills.loader import MAX_BODY_CHARS
+
+    home = _home(tmp_path)
+    folder = home / ".claude" / "skills" / "big"
+    folder.mkdir(parents=True)
+    (folder / "SKILL.md").write_text(
+        "---\nname: big\ndescription: big one\n---\n" + "x" * (MAX_BODY_CHARS + 8000),
+        encoding="utf-8",
+    )
+
+    sources, skills = discover_agent_skills(home)
+
+    assert [s.skill.name for s in skills] == ["big"]
+    assert skills[0].skill.on_demand is True
+    claude = next(s for s in sources if s.agent_id == "claude")
+    assert claude.skipped == ()

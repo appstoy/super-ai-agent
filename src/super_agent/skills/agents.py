@@ -83,6 +83,9 @@ class AgentSource:
     path: Path
     exists: bool
     skills: tuple[AgentSkill, ...] = ()
+    # Folders that look like a skill but could not be read. Reporting these is
+    # the difference between "you have no such skill" and "this one is broken".
+    skipped: tuple[tuple[str, str], ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -91,6 +94,7 @@ class AgentSource:
             "path": str(self.path),
             "exists": self.exists,
             "count": len(self.skills),
+            "skipped": [list(item) for item in self.skipped],
         }
 
 
@@ -114,19 +118,24 @@ def _fingerprint(skill: Skill) -> str:
     return digest.hexdigest()
 
 
-def _read_skill(folder: Path) -> Skill | None:
-    """Parse a folder's SKILL.md, following symlinks, or None if there is none."""
+def _read_skill(folder: Path) -> tuple[Skill | None, str]:
+    """Parse a folder's SKILL.md.
+
+    Returns (skill, "") on success, (None, "") when the folder simply is not a
+    skill, and (None, reason) when it looks like one but cannot be read — that
+    last case used to be swallowed, which made a broken skill look absent.
+    """
 
     skill_file = folder / SKILL_FILE_NAME
     try:
         if not skill_file.is_file():  # is_file() follows symlinks, unlike islink
-            return None
+            return None, ""
     except OSError:
-        return None
+        return None, ""
     try:
-        return parse_skill_file(skill_file)
-    except Exception:  # noqa: BLE001 - another agent's broken skill is not ours
-        return None
+        return parse_skill_file(skill_file), ""
+    except Exception as exc:  # noqa: BLE001 - another agent's broken skill is not ours
+        return None, f"{type(exc).__name__}: {exc}"
 
 
 def discover_agent_skills(
@@ -148,6 +157,7 @@ def discover_agent_skills(
     for agent_id, label, folder in _agent_roots(root):
         exists = folder.is_dir()
         found: list[AgentSkill] = []
+        skipped: list[tuple[str, str]] = []
         if exists:
             try:
                 children = sorted(folder.iterdir(), key=lambda item: item.name.lower())
@@ -159,8 +169,10 @@ def discover_agent_skills(
                         continue
                 except OSError:
                     continue
-                skill = _read_skill(child)
+                skill, reason = _read_skill(child)
                 if skill is None:
+                    if reason:
+                        skipped.append((child.name, reason))
                     continue
                 key = _fingerprint(skill)
                 pair = (agent_id, label)
@@ -209,6 +221,7 @@ def discover_agent_skills(
                 path=folder,
                 exists=exists,
                 skills=tuple(found),
+                skipped=tuple(skipped),
             )
         )
 

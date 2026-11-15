@@ -51,6 +51,9 @@ class Skill:
     tags: tuple[str, ...] = ()
     source: str = "user"
     resources: tuple[str, ...] = ()
+    # True when the body is too long to inline; callers inject an excerpt and
+    # the model reads the rest with skill_read.
+    on_demand: bool = False
 
     @property
     def title(self) -> str:
@@ -69,10 +72,28 @@ class Skill:
             "tags": list(self.tags),
             "source": self.source,
             "resources": list(self.resources),
+            "on_demand": self.on_demand,
+            "body_chars": len(self.body),
         }
         if include_body:
             payload["body"] = self.body
         return payload
+
+    def excerpt(self, limit: int = MAX_BODY_CHARS) -> str:
+        """Return what is safe to inline, plus a pointer to the full body."""
+
+        if not self.on_demand:
+            return self.body
+        remaining = len(self.body) - limit
+        head = self.body[:limit].rstrip()
+        return (
+            head
+            + "\n\n…（正文还有 "
+            + str(remaining)
+            + " 个字符没有贴出来。需要细节时用 skill_read 读取全文："
+            + self.name
+            + "。）"
+        )
 
     def summary_line(self) -> str:
         """One-line catalogue entry used in the system prompt."""
@@ -138,11 +159,12 @@ def parse_skill_file(path: Path, *, source: str = "user") -> Skill:
     body = body.strip()
     if not body:
         raise ValidationError("skill body is empty")
-    if len(body) > MAX_BODY_CHARS:
-        raise ValidationError(
-            f"skill body is {len(body)} chars; limit is {MAX_BODY_CHARS}. "
-            "Move detail into a bundled resource file and reference it."
-        )
+    # A long body is not an error. Real skills (appstoy-video is 36k chars of
+    # routing tables) cannot be inlined without drowning the prompt, but
+    # rejecting them made them vanish from the list entirely with no
+    # explanation. Keep the body on disk and hand the model an excerpt plus a
+    # pointer to skill_read.
+    on_demand = len(body) > MAX_BODY_CHARS
     name = (meta.get("name") or path.parent.name).strip().lower()
     if not _NAME_RE.match(name):
         raise ValidationError(
@@ -176,6 +198,7 @@ def parse_skill_file(path: Path, *, source: str = "user") -> Skill:
         tags=tags,
         source=meta.get("source", source) or source,
         resources=resources,
+        on_demand=on_demand,
     )
 
 
